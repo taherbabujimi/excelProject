@@ -72,7 +72,7 @@ cron.schedule("1 10 1 * *", async () => {
 
     for (let i = 0; i < data.length; i++) {
       dataName.push(
-        await Models.Name.findOne({
+        Models.Name.findOne({
           where: { id: data[i].dataValues.name },
         })
       );
@@ -234,7 +234,7 @@ cron.schedule("1 10 * * MON", async () => {
 
     for (let i = 0; i < data.length; i++) {
       dataName.push(
-        await Models.Name.findOne({
+        Models.Name.findOne({
           where: { id: data[i].dataValues.name },
         })
       );
@@ -440,7 +440,7 @@ cron.schedule("1 10 1 * *", async () => {
 
     for (let i = 0; i < data.length; i++) {
       dataName.push(
-        await Models.Name.findOne({
+        Models.Name.findOne({
           where: { id: data[i].dataValues.name },
         })
       );
@@ -496,7 +496,7 @@ cron.schedule("1 10 1 * *", async () => {
 
     for (let i = 0; i < lastMonthData.length; i++) {
       lastMonthDataName.push(
-        await Models.Name.findOne({
+        Models.Name.findOne({
           where: { id: data[i].dataValues.name },
         })
       );
@@ -551,6 +551,314 @@ cron.schedule("1 10 1 * *", async () => {
         "category",
         lastToLastMonthName,
         lastMonthName,
+        "Absolute Difference",
+        "Percentage Difference",
+      ],
+      [
+        `Total A`,
+        lastToLastMonthTotalA,
+        lastMonthTotalA,
+        lastMonthTotalA - lastToLastMonthTotalA,
+        `${(
+          (100 * (lastMonthTotalA - lastToLastMonthTotalA)) /
+          ((lastMonthTotalA + lastToLastMonthTotalA) / 2)
+        ).toFixed(2)}%`,
+      ],
+      [
+        "Total B",
+        lastToLastMonthTotalB,
+        lastMonthTotalB,
+        lastMonthTotalB - lastToLastMonthTotalB,
+        `${(
+          (100 * (lastMonthTotalB - lastToLastMonthTotalB)) /
+          ((lastMonthTotalB + lastToLastMonthTotalB) / 2)
+        ).toFixed(2)}%`,
+      ],
+      [
+        "Total C",
+        lastToLastMonthTotalC,
+        lastMonthTotalC,
+        lastMonthTotalC - lastToLastMonthTotalC,
+        `${(
+          (100 * (lastMonthTotalC - lastToLastMonthTotalC)) /
+          ((lastMonthTotalC + lastToLastMonthTotalC) / 2)
+        ).toFixed(2)}%`,
+      ],
+      [
+        "Total D",
+        lastToLastMonthTotalD,
+        lastMonthTotalD,
+        lastMonthTotalD - lastToLastMonthTotalD,
+        `${(
+          (100 * (lastMonthTotalD - lastToLastMonthTotalD)) /
+          ((lastMonthTotalD + lastToLastMonthTotalD) / 2)
+        ).toFixed(2)}%`,
+      ],
+      [
+        "Total E",
+        lastToLastMonthTotalE,
+        lastMonthTotalE,
+        lastMonthTotalE - lastToLastMonthTotalE,
+        `${(
+          (100 * (lastMonthTotalE - lastToLastMonthTotalE)) /
+          ((lastMonthTotalE + lastToLastMonthTotalE) / 2)
+        ).toFixed(2)}%`,
+      ],
+    ]);
+
+    var wscols = [
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 16 },
+      { wch: 18 },
+    ];
+
+    worksheet["!cols"] = wscols;
+
+    xlsx.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+
+    xlsx.writeFile(workbook, `twoMonthMOMData.xlsx`);
+  } catch (error) {
+    console.log(`${messages.somethingWentWrong} : ${error}`);
+  }
+});
+
+//1 10 1 JAN *
+cron.schedule("*/30 * * * * *", async () => {
+  try {
+    function formatFirstDate(date, format) {
+      const map = {
+        mm: date.getMonth() + 1,
+        dd: date.getDate(),
+        yy: date.getFullYear(),
+      };
+
+      console.log(format.replace(/mm|dd|yy|yyy/gi, (matched) => map[matched]));
+
+      return format.replace(/mm|dd|yy|yyy/gi, (matched) => map[matched]);
+    }
+
+    function formatLastDate(date, format) {
+      const map = {
+        mm: date.getMonth(),
+        dd: date.getDate(),
+        yy: date.getFullYear(),
+      };
+
+      console.log("mm: ", map.mm);
+      map.mm += 1;
+
+      return format.replace(/mm|dd|yy|yyy/gi, (matched) => map[matched]);
+    }
+
+    function getLastYearDate() {
+      let date = new Date(),
+        y = date.getFullYear();
+
+      let fDay = new Date(y - 1, 0, 1);
+      let lDay = new Date(y, 0, 0);
+
+      let lastYearFirstDay = new Date(
+        fDay.getTime() + Math.abs(fDay.getTimezoneOffset() * 60000)
+      );
+      let lastYearLastDay = new Date(
+        lDay.getTime() + Math.abs(lDay.getTimezoneOffset() * 60000)
+      );
+
+      let lastYear = y - 1;
+
+      return { lastYearFirstDay, lastYearLastDay, lastYear };
+    }
+
+    function getLastToLastMonthDate() {
+      let date = new Date(),
+        y = date.getFullYear();
+
+      let fDay = new Date(y - 2, 0, 1);
+      let lDay = new Date(y - 1, 0, 0);
+
+      let lastToLastYearFirstDay = new Date(
+        fDay.getTime() + Math.abs(fDay.getTimezoneOffset() * 60000)
+      );
+      let lastToLastYearLastDay = new Date(
+        lDay.getTime() + Math.abs(lDay.getTimezoneOffset() * 60000)
+      );
+
+      let lastToLastYear = y - 2;
+
+      return { lastToLastYearFirstDay, lastToLastYearLastDay, lastToLastYear };
+    }
+
+    const { lastYearFirstDay, lastYearLastDay, lastYear } = getLastYearDate();
+
+    console.log("last year: ", lastYear);
+    console.log("last year first day: ", lastYearFirstDay);
+    console.log("last year last day: ", lastYearLastDay);
+
+    const { lastToLastYearFirstDay, lastToLastYearLastDay, lastToLastYear } =
+      getLastToLastMonthDate();
+
+    console.log("yearL: ", lastToLastYear);
+
+    console.log("last to last :", lastToLastYearFirstDay);
+    console.log("last to last :", lastToLastYearLastDay);
+
+    let formattedLastYearFirstDay = formatFirstDate(
+      lastYearFirstDay,
+      "yy-mm-dd"
+    );
+    let formattedLastYearLastDay = formatLastDate(lastYearLastDay, "yy-mm-dd");
+
+    console.log("formatted: ", formattedLastYearFirstDay);
+    console.log("formatted: ", formattedLastYearLastDay);
+
+    let formattedLastToLastYearFirstDay = formatFirstDate(
+      lastToLastYearFirstDay,
+      "yy-mm-dd"
+    );
+    let formattedLastToLastYearLastDay = formatLastDate(
+      lastToLastYearLastDay,
+      "yy-mm-dd"
+    );
+
+    console.log("formatted: ", formattedLastToLastYearFirstDay);
+    console.log("formatted: ", formattedLastToLastYearLastDay);
+
+    const data = await Models.Data.findAll({
+      where: {
+        date: {
+          [Op.gt]: new Date(formattedLastYearFirstDay),
+          [Op.lte]: new Date(formattedLastYearLastDay),
+        },
+      },
+    });
+
+    const lastMonthData = await Models.Data.findAll({
+      where: {
+        date: {
+          [Op.gt]: new Date(formattedLastToLastYearFirstDay),
+          [Op.lte]: new Date(formattedLastToLastYearLastDay),
+        },
+      },
+    });
+
+    let dataName = [];
+    let dataNameResult = [];
+
+    for (let i = 0; i < data.length; i++) {
+      dataName.push(
+        Models.Name.findOne({
+          where: { id: data[i].dataValues.name },
+        })
+      );
+    }
+
+    await Promise.all(dataName)
+      .then((result) => {
+        // console.log(result);
+        dataNameResult = result.map((item) => {
+          return {
+            name: item.dataValues.name,
+            id: item.dataValues.id,
+            category: item.dataValues.category,
+          };
+        });
+      })
+      .catch((error) => {
+        console.log("Error: ", error);
+      });
+
+    // console.log(dataNameResult);
+
+    let lastMonthTotalA = 0;
+    let lastMonthTotalB = 0;
+    let lastMonthTotalC = 0;
+    let lastMonthTotalD = 0;
+    let lastMonthTotalE = 0;
+
+    for (let i = 0; i < data.length; i++) {
+      if (dataNameResult[i].category === "a") {
+        lastMonthTotalA += data[i].dataValues.amount;
+      }
+
+      if (dataNameResult[i].category === "b") {
+        lastMonthTotalB += data[i].dataValues.amount;
+      }
+
+      if (dataNameResult[i].category === "c") {
+        lastMonthTotalC += data[i].dataValues.amount;
+      }
+
+      if (dataNameResult[i].category === "d") {
+        lastMonthTotalD += data[i].dataValues.amount;
+      }
+
+      if (dataNameResult[i].category === "e") {
+        lastMonthTotalE += data[i].dataValues.amount;
+      }
+    }
+
+    let lastMonthDataName = [];
+    let lastMonthDataNameResult = [];
+
+    for (let i = 0; i < lastMonthData.length; i++) {
+      lastMonthDataName.push(
+        Models.Name.findOne({
+          where: { id: data[i].dataValues.name },
+        })
+      );
+    }
+
+    await Promise.all(lastMonthDataName)
+      .then((result) => {
+        // console.log(result);
+        lastMonthDataNameResult = result.map((item) => {
+          return {
+            name: item.dataValues.name,
+            id: item.dataValues.id,
+            category: item.dataValues.category,
+          };
+        });
+      })
+      .catch((error) => {
+        console.log("Error: ", error);
+      });
+
+    let lastToLastMonthTotalA = 0;
+    let lastToLastMonthTotalB = 0;
+    let lastToLastMonthTotalC = 0;
+    let lastToLastMonthTotalD = 0;
+    let lastToLastMonthTotalE = 0;
+    for (let i = 0; i < lastMonthData.length; i++) {
+      if (lastMonthDataNameResult[i].category === "a") {
+        lastToLastMonthTotalA += lastMonthData[i].dataValues.amount;
+      }
+
+      if (lastMonthDataNameResult[i].category === "b") {
+        lastToLastMonthTotalB += lastMonthData[i].dataValues.amount;
+      }
+
+      if (lastMonthDataNameResult[i].category === "c") {
+        lastToLastMonthTotalC += lastMonthData[i].dataValues.amount;
+      }
+
+      if (lastMonthDataNameResult[i].category === "d") {
+        lastToLastMonthTotalD += lastMonthData[i].dataValues.amount;
+      }
+
+      if (lastMonthDataNameResult[i].category === "e") {
+        lastToLastMonthTotalE += lastMonthData[i].dataValues.amount;
+      }
+    }
+
+    const workbook = xlsx.utils.book_new();
+
+    const worksheet = xlsx.utils.aoa_to_sheet([
+      [
+        "category",
+        lastToLastYear,
+        lastYear,
         "Absolute Difference",
         "Percentage Difference",
       ],
