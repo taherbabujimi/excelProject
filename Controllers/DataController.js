@@ -317,6 +317,53 @@ module.exports.getData = async (req, res) => {
           [Op.lte]: new Date(endDate),
         },
       },
+      include: [{ model: Models.Name, as: "Name" }],
+    });
+
+    let filteredData = data.map((item) => {
+      return {
+        name: item.dataValues.Name.dataValues.name,
+        category: item.dataValues.Name.dataValues.category,
+        date: item.dataValues.date,
+        amount: item.dataValues.amount,
+      };
+    });
+
+    const categoryTotal = await Models.Data.findAll({
+      where: {
+        date: {
+          [Op.gte]: new Date(startDate),
+          [Op.lte]: new Date(endDate),
+        },
+      },
+      include: [
+        {
+          model: Models.Name,
+          as: "Name",
+          attributes: [],
+        },
+      ],
+      attributes: [
+        [
+          Models.Sequelize.fn("SUM", Models.Sequelize.col("amount")),
+          "totalAmount",
+        ],
+        [Models.Sequelize.col("Name.category"), "category"],
+      ],
+      group: ["Name.category"],
+      raw: true,
+    });
+
+    const total = data.reduce((sum, item) => sum + item.amount, 0);
+
+    let nameTotal = {};
+
+    filteredData.map((item) => {
+      if (Object.hasOwn(nameTotal, `Total ${item.name}`)) {
+        nameTotal[`Total ${item.name}`] += item.amount;
+      } else {
+        nameTotal[`Total ${item.name}`] = item.amount;
+      }
     });
 
     if (!data) {
@@ -331,61 +378,6 @@ module.exports.getData = async (req, res) => {
       );
     }
 
-    let filteredData = [];
-
-    let nameTotal = {};
-
-    let total = 0;
-    let totalA = 0;
-    let totalB = 0;
-    let totalC = 0;
-    let totalD = 0;
-    let totalE = 0;
-    for (let i = 0; i < data.length; i++) {
-      let name = await Models.Name.findOne({
-        where: { id: data[i].dataValues.name },
-      });
-
-      filteredData.push({
-        name: name.name,
-        category: name.category,
-        date: data[i].dataValues.date,
-        amount: data[i].dataValues.amount,
-      });
-
-      if (name.category === "a") {
-        totalA += data[i].dataValues.amount;
-      }
-
-      if (name.category === "b") {
-        totalB += data[i].dataValues.amount;
-      }
-
-      if (name.category === "c") {
-        totalC += data[i].dataValues.amount;
-      }
-
-      if (name.category === "d") {
-        totalD += data[i].dataValues.amount;
-      }
-
-      if (name.category === "e") {
-        totalE += data[i].dataValues.amount;
-      }
-
-      total += data[i].dataValues.amount;
-
-      let Name = name.name;
-
-      if (Object.hasOwn(nameTotal, `Total ${Name}`)) {
-        nameTotal[`Total ${Name}`] += data[i].dataValues.amount;
-      } else {
-        nameTotal[`Total ${Name}`] = data[i].dataValues.amount;
-      }
-    }
-
-    console.log(filteredData);
-
     const workbook = xlsx.utils.book_new();
 
     const worksheet = xlsx.utils.aoa_to_sheet([
@@ -397,13 +389,13 @@ module.exports.getData = async (req, res) => {
         item.amount,
       ]),
       [],
-      ["Grand Total", total],
+      ["Grand Total", total.toFixed(2)],
       [],
-      ["Total A", totalA],
-      ["Total B", totalB],
-      ["Total C", totalC],
-      ["Total D", totalD],
-      ["Total E", totalE],
+      ["Total A", categoryTotal[0]?.totalAmount.toFixed(2)],
+      ["Total B", categoryTotal[1]?.totalAmount.toFixed(2)],
+      ["Total C", categoryTotal[2]?.totalAmount.toFixed(2)],
+      ["Total D", categoryTotal[3]?.totalAmount.toFixed(2)],
+      ["Total E", categoryTotal[4]?.totalAmount.toFixed(2)],
       [],
       ...Object.entries(nameTotal).map(([key, value]) => [key, value]),
     ]);

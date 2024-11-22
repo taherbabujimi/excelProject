@@ -65,86 +65,56 @@ cron.schedule("1 10 1 * *", async () => {
           [Op.lte]: new Date(formattedLastDay),
         },
       },
+      include: [{ model: Models.Name, as: "Name" }],
     });
 
-    let dataName = [];
-    let dataNameResult = [];
+    let filteredData = data.map((item) => {
+      return {
+        name: item.dataValues.Name.dataValues.name,
+        category: item.dataValues.Name.dataValues.category,
+        date: item.dataValues.date,
+        amount: item.dataValues.amount,
+      };
+    });
 
-    for (let i = 0; i < data.length; i++) {
-      dataName.push(
-        Models.Name.findOne({
-          where: { id: data[i].dataValues.name },
-        })
-      );
-    }
+    const categoryTotal = await Models.Data.findAll({
+      where: {
+        date: {
+          [Op.gte]: new Date(formattedFirstDay),
+          [Op.lte]: new Date(formattedLastDay),
+        },
+      },
+      include: [
+        {
+          model: Models.Name,
+          as: "Name",
+          attributes: [],
+        },
+      ],
+      attributes: [
+        [
+          Models.Sequelize.fn("SUM", Models.Sequelize.col("amount")),
+          "totalAmount",
+        ],
+        [Models.Sequelize.col("Name.category"), "category"],
+      ],
+      group: ["Name.category"],
+      raw: true,
+    });
 
-    await Promise.all(dataName)
-      .then((result) => {
-        // console.log(result);
-        dataNameResult = result.map((item) => {
-          return {
-            name: item.dataValues.name,
-            id: item.dataValues.id,
-            category: item.dataValues.category,
-          };
-        });
-      })
-      .catch((error) => {
-        console.log("Error: ", error);
-      });
+    console.log("category total: ", categoryTotal);
 
-    let filteredData = [];
+    const total = data.reduce((sum, item) => sum + item.amount, 0);
 
     let nameTotal = {};
 
-    let total = 0;
-    let totalA = 0;
-    let totalB = 0;
-    let totalC = 0;
-    let totalD = 0;
-    let totalE = 0;
-    for (let i = 0; i < data.length; i++) {
-      console.log(data[i].dataValues);
-      console.log(dataNameResult[i]);
-      filteredData.push({
-        name: dataNameResult[i].name,
-        category: dataNameResult[i].category,
-        date: data[i].dataValues.date,
-        amount: data[i].dataValues.amount,
-      });
-
-      if (dataNameResult[i].category === "a") {
-        totalA += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "b") {
-        totalB += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "c") {
-        totalC += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "d") {
-        totalD += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "e") {
-        totalE += data[i].dataValues.amount;
-      }
-
-      total += data[i].dataValues.amount;
-
-      let Name = dataNameResult[i].name;
-
-      if (Object.hasOwn(nameTotal, `Total ${Name}`)) {
-        nameTotal[`Total ${Name}`] += data[i].dataValues.amount;
+    filteredData.map((item) => {
+      if (Object.hasOwn(nameTotal, `Total ${item.name}`)) {
+        nameTotal[`Total ${item.name}`] += item.amount;
       } else {
-        nameTotal[`Total ${Name}`] = data[i].dataValues.amount;
+        nameTotal[`Total ${item.name}`] = item.amount;
       }
-    }
-
-    console.log(filteredData);
+    });
 
     const workbook = xlsx.utils.book_new();
 
@@ -159,11 +129,11 @@ cron.schedule("1 10 1 * *", async () => {
       [],
       ["Grand Total", total],
       [],
-      ["Total A", totalA],
-      ["Total B", totalB],
-      ["Total C", totalC],
-      ["Total D", totalD],
-      ["Total E", totalE],
+      ["Total A", categoryTotal[0]?.totalAmount.toFixed(2)],
+      ["Total B", categoryTotal[1]?.totalAmount.toFixed(2)],
+      ["Total C", categoryTotal[2]?.totalAmount.toFixed(2)],
+      ["Total D", categoryTotal[3]?.totalAmount.toFixed(2)],
+      ["Total E", categoryTotal[4]?.totalAmount.toFixed(2)],
       [],
       ...Object.entries(nameTotal).map(([key, value]) => [key, value]),
     ]);
@@ -227,88 +197,56 @@ cron.schedule("1 10 * * MON", async () => {
           [Op.lte]: new Date(lastWeekSunday),
         },
       },
+      include: [{ model: Models.Name, as: "Name" }],
     });
 
-    let dataName = [];
-    let dataNameResult = [];
+    let filteredData = data.map((item) => {
+      return {
+        name: item.dataValues.Name.dataValues.name,
+        category: item.dataValues.Name.dataValues.category,
+        date: item.dataValues.date,
+        amount: item.dataValues.amount,
+      };
+    });
 
-    for (let i = 0; i < data.length; i++) {
-      dataName.push(
-        Models.Name.findOne({
-          where: { id: data[i].dataValues.name },
-        })
-      );
-    }
+    const categoryTotal = await Models.Data.findAll({
+      where: {
+        date: {
+          [Op.gte]: new Date(lastWeekMonday),
+          [Op.lte]: new Date(lastWeekSunday),
+        },
+      },
+      include: [
+        {
+          model: Models.Name,
+          as: "Name",
+          attributes: [],
+        },
+      ],
+      attributes: [
+        [
+          Models.Sequelize.fn("SUM", Models.Sequelize.col("amount")),
+          "totalAmount",
+        ],
+        [Models.Sequelize.col("Name.category"), "category"],
+      ],
+      group: ["Name.category"],
+      raw: true,
+    });
 
-    await Promise.all(dataName)
-      .then((result) => {
-        // console.log(result);
-        dataNameResult = result.map((item) => {
-          return {
-            name: item.dataValues.name,
-            id: item.dataValues.id,
-            category: item.dataValues.category,
-          };
-        });
-      })
-      .catch((error) => {
-        console.log("Error: ", error);
-      });
+    console.log("category total: ", categoryTotal);
 
-    let filteredData = [];
+    const total = data.reduce((sum, item) => sum + item.amount, 0);
 
     let nameTotal = {};
 
-    let total = 0;
-    let totalA = 0;
-    let totalB = 0;
-    let totalC = 0;
-    let totalD = 0;
-    let totalE = 0;
-    for (let i = 0; i < data.length; i++) {
-      filteredData.push({
-        name: dataNameResult[i].name,
-        category: dataNameResult[i].category,
-        date: data[i].dataValues.date,
-        amount: data[i].dataValues.amount,
-      });
-
-      if (dataNameResult[i].category === "a") {
-        totalA += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "b") {
-        totalB += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "c") {
-        totalC += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "d") {
-        totalD += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "e") {
-        totalE += data[i].dataValues.amount;
-      }
-
-      total += data[i].dataValues.amount;
-
-      let Name = dataNameResult[i].name;
-
-      if (Object.hasOwn(nameTotal, `Total ${Name}`)) {
-        nameTotal[`Total ${Name}`] += data[i].dataValues.amount;
+    filteredData.map((item) => {
+      if (Object.hasOwn(nameTotal, `Total ${item.name}`)) {
+        nameTotal[`Total ${item.name}`] += item.amount;
       } else {
-        nameTotal[`Total ${Name}`] = data[i].dataValues.amount;
+        nameTotal[`Total ${item.name}`] = item.amount;
       }
-    }
-
-    console.log(nameTotal);
-
-    console.log("total", total);
-
-    console.log(filteredData);
+    });
 
     const workbook = xlsx.utils.book_new();
 
@@ -323,11 +261,11 @@ cron.schedule("1 10 * * MON", async () => {
       [],
       ["Grand Total", total],
       [],
-      ["Total A", totalA],
-      ["Total B", totalB],
-      ["Total C", totalC],
-      ["Total D", totalD],
-      ["Total E", totalE],
+      ["Total A", categoryTotal[0]?.totalAmount.toFixed(2)],
+      ["Total B", categoryTotal[1]?.totalAmount.toFixed(2)],
+      ["Total C", categoryTotal[2]?.totalAmount.toFixed(2)],
+      ["Total D", categoryTotal[3]?.totalAmount.toFixed(2)],
+      ["Total E", categoryTotal[4]?.totalAmount.toFixed(2)],
       [],
       ...Object.entries(nameTotal).map(([key, value]) => [key, value]),
     ]);
@@ -350,7 +288,7 @@ cron.schedule("1 10 * * MON", async () => {
   }
 });
 
-cron.schedule("1 10 1 * *", async () => {
+cron.schedule("*/3 * * * * *", async () => {
   try {
     function formatFirstDate(date, format) {
       const map = {
@@ -407,6 +345,7 @@ cron.schedule("1 10 1 * *", async () => {
 
     let formattedFirstDay = formatFirstDate(firstDay, "yy-mm-dd");
     let formattedLastDay = formatLastDate(lastDay, "yy-mm-dd");
+    console.log("last month: ",formattedFirstDay, formattedLastDay);
 
     let formattedLastMonthFirstDay = formatFirstDate(
       lastMonthFirstDay,
@@ -416,133 +355,61 @@ cron.schedule("1 10 1 * *", async () => {
       lastMonthLastDay,
       "yy-mm-dd"
     );
+    console.log("last to last month: ",formattedLastMonthFirstDay, formattedLastMonthLastDay);
 
-    const data = await Models.Data.findAll({
+    const lastMonthCategoryTotal = await Models.Data.findAll({
       where: {
         date: {
           [Op.gte]: new Date(formattedFirstDay),
           [Op.lte]: new Date(formattedLastDay),
         },
       },
+      include: [
+        {
+          model: Models.Name,
+          as: "Name",
+          attributes: [],
+        },
+      ],
+      attributes: [
+        [
+          Models.Sequelize.fn("SUM", Models.Sequelize.col("amount")),
+          "totalAmount",
+        ],
+        [Models.Sequelize.col("Name.category"), "category"],
+      ],
+      group: ["Name.category"],
+      raw: true,
     });
 
-    const lastMonthData = await Models.Data.findAll({
+    console.log("october category total: ", lastMonthCategoryTotal);
+
+    const lastToLastMonthCategoryTotal = await Models.Data.findAll({
       where: {
         date: {
           [Op.gte]: new Date(formattedLastMonthFirstDay),
           [Op.lte]: new Date(formattedLastMonthLastDay),
         },
       },
+      include: [
+        {
+          model: Models.Name,
+          as: "Name",
+          attributes: [],
+        },
+      ],
+      attributes: [
+        [
+          Models.Sequelize.fn("SUM", Models.Sequelize.col("amount")),
+          "totalAmount",
+        ],
+        [Models.Sequelize.col("Name.category"), "category"],
+      ],
+      group: ["Name.category"],
+      raw: true,
     });
 
-    let dataName = [];
-    let dataNameResult = [];
-
-    for (let i = 0; i < data.length; i++) {
-      dataName.push(
-        Models.Name.findOne({
-          where: { id: data[i].dataValues.name },
-        })
-      );
-    }
-
-    await Promise.all(dataName)
-      .then((result) => {
-        // console.log(result);
-        dataNameResult = result.map((item) => {
-          return {
-            name: item.dataValues.name,
-            id: item.dataValues.id,
-            category: item.dataValues.category,
-          };
-        });
-      })
-      .catch((error) => {
-        console.log("Error: ", error);
-      });
-
-    // console.log(dataNameResult);
-
-    let lastMonthTotalA = 0;
-    let lastMonthTotalB = 0;
-    let lastMonthTotalC = 0;
-    let lastMonthTotalD = 0;
-    let lastMonthTotalE = 0;
-
-    for (let i = 0; i < data.length; i++) {
-      if (dataNameResult[i].category === "a") {
-        lastMonthTotalA += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "b") {
-        lastMonthTotalB += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "c") {
-        lastMonthTotalC += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "d") {
-        lastMonthTotalD += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "e") {
-        lastMonthTotalE += data[i].dataValues.amount;
-      }
-    }
-
-    let lastMonthDataName = [];
-    let lastMonthDataNameResult = [];
-
-    for (let i = 0; i < lastMonthData.length; i++) {
-      lastMonthDataName.push(
-        Models.Name.findOne({
-          where: { id: data[i].dataValues.name },
-        })
-      );
-    }
-
-    await Promise.all(lastMonthDataName)
-      .then((result) => {
-        // console.log(result);
-        lastMonthDataNameResult = result.map((item) => {
-          return {
-            name: item.dataValues.name,
-            id: item.dataValues.id,
-            category: item.dataValues.category,
-          };
-        });
-      })
-      .catch((error) => {
-        console.log("Error: ", error);
-      });
-
-    let lastToLastMonthTotalA = 0;
-    let lastToLastMonthTotalB = 0;
-    let lastToLastMonthTotalC = 0;
-    let lastToLastMonthTotalD = 0;
-    let lastToLastMonthTotalE = 0;
-    for (let i = 0; i < lastMonthData.length; i++) {
-      if (lastMonthDataNameResult[i].category === "a") {
-        lastToLastMonthTotalA += lastMonthData[i].dataValues.amount;
-      }
-
-      if (lastMonthDataNameResult[i].category === "b") {
-        lastToLastMonthTotalB += lastMonthData[i].dataValues.amount;
-      }
-
-      if (lastMonthDataNameResult[i].category === "c") {
-        lastToLastMonthTotalC += lastMonthData[i].dataValues.amount;
-      }
-
-      if (lastMonthDataNameResult[i].category === "d") {
-        lastToLastMonthTotalD += lastMonthData[i].dataValues.amount;
-      }
-
-      if (lastMonthDataNameResult[i].category === "e") {
-        lastToLastMonthTotalE += lastMonthData[i].dataValues.amount;
-      }
-    }
+    console.log("september: ", lastToLastMonthCategoryTotal);
 
     const workbook = xlsx.utils.book_new();
 
@@ -556,52 +423,77 @@ cron.schedule("1 10 1 * *", async () => {
       ],
       [
         `Total A`,
-        lastToLastMonthTotalA,
-        lastMonthTotalA,
-        lastMonthTotalA - lastToLastMonthTotalA,
+        lastToLastMonthCategoryTotal[0].totalAmount.toFixed(2),
+        lastMonthCategoryTotal[0].totalAmount.toFixed(2),
+        lastMonthCategoryTotal[0].totalAmount.toFixed(2) -
+          lastToLastMonthCategoryTotal[0].totalAmount.toFixed(2),
         `${(
-          (100 * (lastMonthTotalA - lastToLastMonthTotalA)) /
-          ((lastMonthTotalA + lastToLastMonthTotalA) / 2)
+          (100 *
+            (lastMonthCategoryTotal[0].totalAmount -
+              lastToLastMonthCategoryTotal[0].totalAmount)) /
+          ((lastMonthCategoryTotal[0].totalAmount +
+            lastToLastMonthCategoryTotal[0].totalAmount) /
+            2)
         ).toFixed(2)}%`,
       ],
       [
         "Total B",
-        lastToLastMonthTotalB,
-        lastMonthTotalB,
-        lastMonthTotalB - lastToLastMonthTotalB,
+        lastToLastMonthCategoryTotal[1].totalAmount.toFixed(2),
+        lastMonthCategoryTotal[1].totalAmount.toFixed(2),
+        lastMonthCategoryTotal[1].totalAmount.toFixed(2) -
+          lastToLastMonthCategoryTotal[1].totalAmount.toFixed(2),
         `${(
-          (100 * (lastMonthTotalB - lastToLastMonthTotalB)) /
-          ((lastMonthTotalB + lastToLastMonthTotalB) / 2)
+          (100 *
+            (lastMonthCategoryTotal[1].totalAmount -
+              lastToLastMonthCategoryTotal[1].totalAmount)) /
+          ((lastMonthCategoryTotal[1].totalAmount +
+            lastToLastMonthCategoryTotal[1].totalAmount) /
+            2)
         ).toFixed(2)}%`,
       ],
       [
         "Total C",
-        lastToLastMonthTotalC,
-        lastMonthTotalC,
-        lastMonthTotalC - lastToLastMonthTotalC,
+        lastToLastMonthCategoryTotal[2].totalAmount.toFixed(2),
+        lastMonthCategoryTotal[2].totalAmount.toFixed(2),
+        lastMonthCategoryTotal[2].totalAmount.toFixed(2) -
+          lastToLastMonthCategoryTotal[2].totalAmount.toFixed(2),
         `${(
-          (100 * (lastMonthTotalC - lastToLastMonthTotalC)) /
-          ((lastMonthTotalC + lastToLastMonthTotalC) / 2)
+          (100 *
+            (lastMonthCategoryTotal[2].totalAmount -
+              lastToLastMonthCategoryTotal[2].totalAmount)) /
+          ((lastMonthCategoryTotal[2].totalAmount +
+            lastToLastMonthCategoryTotal[2].totalAmount) /
+            2)
         ).toFixed(2)}%`,
       ],
       [
         "Total D",
-        lastToLastMonthTotalD,
-        lastMonthTotalD,
-        lastMonthTotalD - lastToLastMonthTotalD,
+        lastToLastMonthCategoryTotal[3].totalAmount.toFixed(2),
+        lastMonthCategoryTotal[3].totalAmount.toFixed(2),
+        lastMonthCategoryTotal[3].totalAmount.toFixed(2) -
+          lastToLastMonthCategoryTotal[3].totalAmount.toFixed(2),
         `${(
-          (100 * (lastMonthTotalD - lastToLastMonthTotalD)) /
-          ((lastMonthTotalD + lastToLastMonthTotalD) / 2)
+          (100 *
+            (lastMonthCategoryTotal[3].totalAmount -
+              lastToLastMonthCategoryTotal[3].totalAmount)) /
+          ((lastMonthCategoryTotal[3].totalAmount +
+            lastToLastMonthCategoryTotal[3].totalAmount) /
+            2)
         ).toFixed(2)}%`,
       ],
       [
         "Total E",
-        lastToLastMonthTotalE,
-        lastMonthTotalE,
-        lastMonthTotalE - lastToLastMonthTotalE,
+        lastToLastMonthCategoryTotal[4].totalAmount.toFixed(2),
+        lastMonthCategoryTotal[4].totalAmount.toFixed(2),
+        lastMonthCategoryTotal[4].totalAmount.toFixed(2) -
+          lastToLastMonthCategoryTotal[4].totalAmount.toFixed(2),
         `${(
-          (100 * (lastMonthTotalE - lastToLastMonthTotalE)) /
-          ((lastMonthTotalE + lastToLastMonthTotalE) / 2)
+          (100 *
+            (lastMonthCategoryTotal[4].totalAmount -
+              lastToLastMonthCategoryTotal[4].totalAmount)) /
+          ((lastMonthCategoryTotal[4].totalAmount +
+            lastToLastMonthCategoryTotal[4].totalAmount) /
+            2)
         ).toFixed(2)}%`,
       ],
     ]);
@@ -624,8 +516,8 @@ cron.schedule("1 10 1 * *", async () => {
   }
 });
 
-//1 10 1 JAN *
-cron.schedule("*/30 * * * * *", async () => {
+// 1 10 1 JAN *
+cron.schedule("1 10 1 JAN *", async () => {
   try {
     function formatFirstDate(date, format) {
       const map = {
@@ -692,17 +584,10 @@ cron.schedule("*/30 * * * * *", async () => {
 
     const { lastYearFirstDay, lastYearLastDay, lastYear } = getLastYearDate();
 
-    console.log("last year: ", lastYear);
-    console.log("last year first day: ", lastYearFirstDay);
-    console.log("last year last day: ", lastYearLastDay);
-
     const { lastToLastYearFirstDay, lastToLastYearLastDay, lastToLastYear } =
       getLastToLastMonthDate();
 
     console.log("yearL: ", lastToLastYear);
-
-    console.log("last to last :", lastToLastYearFirstDay);
-    console.log("last to last :", lastToLastYearLastDay);
 
     let formattedLastYearFirstDay = formatFirstDate(
       lastYearFirstDay,
@@ -725,132 +610,58 @@ cron.schedule("*/30 * * * * *", async () => {
     console.log("formatted: ", formattedLastToLastYearFirstDay);
     console.log("formatted: ", formattedLastToLastYearLastDay);
 
-    const data = await Models.Data.findAll({
+    const lastYearCategoryTotal = await Models.Data.findAll({
       where: {
         date: {
-          [Op.gt]: new Date(formattedLastYearFirstDay),
+          [Op.gte]: new Date(formattedLastYearFirstDay),
           [Op.lte]: new Date(formattedLastYearLastDay),
         },
       },
+      include: [
+        {
+          model: Models.Name,
+          as: "Name",
+          attributes: [],
+        },
+      ],
+      attributes: [
+        [
+          Models.Sequelize.fn("SUM", Models.Sequelize.col("amount")),
+          "totalAmount",
+        ],
+        [Models.Sequelize.col("Name.category"), "category"],
+      ],
+      group: ["Name.category"],
+      raw: true,
     });
+    console.log(lastYearCategoryTotal);
 
-    const lastMonthData = await Models.Data.findAll({
+    //------------------------------------------------------------------------
+
+    const lastToLastYearCategoryTotal = await Models.Data.findAll({
       where: {
         date: {
-          [Op.gt]: new Date(formattedLastToLastYearFirstDay),
+          [Op.gte]: new Date(formattedLastToLastYearFirstDay),
           [Op.lte]: new Date(formattedLastToLastYearLastDay),
         },
       },
+      include: [
+        {
+          model: Models.Name,
+          as: "Name",
+          attributes: [],
+        },
+      ],
+      attributes: [
+        [
+          Models.Sequelize.fn("SUM", Models.Sequelize.col("amount")),
+          "totalAmount",
+        ],
+        [Models.Sequelize.col("Name.category"), "category"],
+      ],
+      group: ["Name.category"],
+      raw: true,
     });
-
-    let dataName = [];
-    let dataNameResult = [];
-
-    for (let i = 0; i < data.length; i++) {
-      dataName.push(
-        Models.Name.findOne({
-          where: { id: data[i].dataValues.name },
-        })
-      );
-    }
-
-    await Promise.all(dataName)
-      .then((result) => {
-        // console.log(result);
-        dataNameResult = result.map((item) => {
-          return {
-            name: item.dataValues.name,
-            id: item.dataValues.id,
-            category: item.dataValues.category,
-          };
-        });
-      })
-      .catch((error) => {
-        console.log("Error: ", error);
-      });
-
-    // console.log(dataNameResult);
-
-    let lastMonthTotalA = 0;
-    let lastMonthTotalB = 0;
-    let lastMonthTotalC = 0;
-    let lastMonthTotalD = 0;
-    let lastMonthTotalE = 0;
-
-    for (let i = 0; i < data.length; i++) {
-      if (dataNameResult[i].category === "a") {
-        lastMonthTotalA += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "b") {
-        lastMonthTotalB += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "c") {
-        lastMonthTotalC += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "d") {
-        lastMonthTotalD += data[i].dataValues.amount;
-      }
-
-      if (dataNameResult[i].category === "e") {
-        lastMonthTotalE += data[i].dataValues.amount;
-      }
-    }
-
-    let lastMonthDataName = [];
-    let lastMonthDataNameResult = [];
-
-    for (let i = 0; i < lastMonthData.length; i++) {
-      lastMonthDataName.push(
-        Models.Name.findOne({
-          where: { id: data[i].dataValues.name },
-        })
-      );
-    }
-
-    await Promise.all(lastMonthDataName)
-      .then((result) => {
-        // console.log(result);
-        lastMonthDataNameResult = result.map((item) => {
-          return {
-            name: item.dataValues.name,
-            id: item.dataValues.id,
-            category: item.dataValues.category,
-          };
-        });
-      })
-      .catch((error) => {
-        console.log("Error: ", error);
-      });
-
-    let lastToLastMonthTotalA = 0;
-    let lastToLastMonthTotalB = 0;
-    let lastToLastMonthTotalC = 0;
-    let lastToLastMonthTotalD = 0;
-    let lastToLastMonthTotalE = 0;
-    for (let i = 0; i < lastMonthData.length; i++) {
-      if (lastMonthDataNameResult[i].category === "a") {
-        lastToLastMonthTotalA += lastMonthData[i].dataValues.amount;
-      }
-
-      if (lastMonthDataNameResult[i].category === "b") {
-        lastToLastMonthTotalB += lastMonthData[i].dataValues.amount;
-      }
-
-      if (lastMonthDataNameResult[i].category === "c") {
-        lastToLastMonthTotalC += lastMonthData[i].dataValues.amount;
-      }
-
-      if (lastMonthDataNameResult[i].category === "d") {
-        lastToLastMonthTotalD += lastMonthData[i].dataValues.amount;
-      }
-
-      if (lastMonthDataNameResult[i].category === "e") {
-        lastToLastMonthTotalE += lastMonthData[i].dataValues.amount;
-      }
-    }
 
     const workbook = xlsx.utils.book_new();
 
@@ -864,52 +675,77 @@ cron.schedule("*/30 * * * * *", async () => {
       ],
       [
         `Total A`,
-        lastToLastMonthTotalA,
-        lastMonthTotalA,
-        lastMonthTotalA - lastToLastMonthTotalA,
+        lastToLastYearCategoryTotal[0].totalAmount,
+        lastYearCategoryTotal[0].totalAmount,
+        lastYearCategoryTotal[0].totalAmount -
+          lastToLastYearCategoryTotal[0].totalAmount,
         `${(
-          (100 * (lastMonthTotalA - lastToLastMonthTotalA)) /
-          ((lastMonthTotalA + lastToLastMonthTotalA) / 2)
+          (100 *
+            (lastYearCategoryTotal[0].totalAmount -
+              lastToLastYearCategoryTotal[0].totalAmount)) /
+          ((lastYearCategoryTotal[0].totalAmount +
+            lastToLastYearCategoryTotal[0].totalAmount) /
+            2)
         ).toFixed(2)}%`,
       ],
       [
         "Total B",
-        lastToLastMonthTotalB,
-        lastMonthTotalB,
-        lastMonthTotalB - lastToLastMonthTotalB,
+        lastToLastYearCategoryTotal[1].totalAmount,
+        lastYearCategoryTotal[1].totalAmount,
+        lastYearCategoryTotal[1].totalAmount -
+          lastToLastYearCategoryTotal[1].totalAmount,
         `${(
-          (100 * (lastMonthTotalB - lastToLastMonthTotalB)) /
-          ((lastMonthTotalB + lastToLastMonthTotalB) / 2)
+          (100 *
+            (lastYearCategoryTotal[1].totalAmount -
+              lastToLastYearCategoryTotal[1].totalAmount)) /
+          ((lastYearCategoryTotal[1].totalAmount +
+            lastToLastYearCategoryTotal[1].totalAmount) /
+            2)
         ).toFixed(2)}%`,
       ],
       [
         "Total C",
-        lastToLastMonthTotalC,
-        lastMonthTotalC,
-        lastMonthTotalC - lastToLastMonthTotalC,
+        lastToLastYearCategoryTotal[2].totalAmount,
+        lastYearCategoryTotal[2].totalAmount,
+        lastYearCategoryTotal[2].totalAmount -
+          lastToLastYearCategoryTotal[2].totalAmount,
         `${(
-          (100 * (lastMonthTotalC - lastToLastMonthTotalC)) /
-          ((lastMonthTotalC + lastToLastMonthTotalC) / 2)
+          (100 *
+            (lastYearCategoryTotal[2].totalAmount -
+              lastToLastYearCategoryTotal[2].totalAmount)) /
+          ((lastYearCategoryTotal[2].totalAmount +
+            lastToLastYearCategoryTotal[2].totalAmount) /
+            2)
         ).toFixed(2)}%`,
       ],
       [
         "Total D",
-        lastToLastMonthTotalD,
-        lastMonthTotalD,
-        lastMonthTotalD - lastToLastMonthTotalD,
+        lastToLastYearCategoryTotal[3].totalAmount,
+        lastYearCategoryTotal[3].totalAmount,
+        lastYearCategoryTotal[3].totalAmount -
+          lastToLastYearCategoryTotal[3].totalAmount,
         `${(
-          (100 * (lastMonthTotalD - lastToLastMonthTotalD)) /
-          ((lastMonthTotalD + lastToLastMonthTotalD) / 2)
+          (100 *
+            (lastYearCategoryTotal[3].totalAmount -
+              lastToLastYearCategoryTotal[3].totalAmount)) /
+          ((lastYearCategoryTotal[3].totalAmount +
+            lastToLastYearCategoryTotal[3].totalAmount) /
+            2)
         ).toFixed(2)}%`,
       ],
       [
         "Total E",
-        lastToLastMonthTotalE,
-        lastMonthTotalE,
-        lastMonthTotalE - lastToLastMonthTotalE,
+        lastToLastYearCategoryTotal[4].totalAmount,
+        lastYearCategoryTotal[4].totalAmount,
+        lastYearCategoryTotal[4].totalAmount -
+          lastToLastYearCategoryTotal[4].totalAmount,
         `${(
-          (100 * (lastMonthTotalE - lastToLastMonthTotalE)) /
-          ((lastMonthTotalE + lastToLastMonthTotalE) / 2)
+          (100 *
+            (lastYearCategoryTotal[4].totalAmount -
+              lastToLastYearCategoryTotal[4].totalAmount)) /
+          ((lastYearCategoryTotal[4].totalAmount +
+            lastToLastYearCategoryTotal[4].totalAmount) /
+            2)
         ).toFixed(2)}%`,
       ],
     ]);
@@ -926,7 +762,7 @@ cron.schedule("*/30 * * * * *", async () => {
 
     xlsx.utils.book_append_sheet(workbook, worksheet, "Sheet1");
 
-    xlsx.writeFile(workbook, `twoMonthMOMData.xlsx`);
+    xlsx.writeFile(workbook, `twoYearMOMData.xlsx`);
   } catch (error) {
     console.log(`${messages.somethingWentWrong} : ${error}`);
   }

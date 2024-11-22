@@ -6,7 +6,11 @@ const { CATEGORIES } = require("../services/constants");
 const categories = Object.values(CATEGORIES);
 
 module.exports = (sequelize, DataTypes) => {
-  class Name extends Model {}
+  class Name extends Model {
+    static associate(models) {
+      this.hasMany(models.Data, { foreignKey: { field: "name" }, as: "Data" });
+    }
+  }
 
   Name.init(
     {
