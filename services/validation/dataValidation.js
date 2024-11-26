@@ -20,6 +20,7 @@ module.exports = {
         .required(),
       date: joi.date().required(),
       amount: joi.number().required(),
+      synonym: joi.string().min(2).max(4).required(),
     });
 
     const validationResult = schema.validate(body);
@@ -38,6 +39,24 @@ module.exports = {
     const schema = joi.object({
       startDate: joi.date().required(),
       endDate: joi.date().required(),
+    });
+
+    const validationResult = schema.validate(body);
+
+    if (validationResult.error) {
+      return errorResponseData(
+        res,
+        messages.errorWhileValidating,
+        validationResult.error.details
+      );
+    } else {
+      return false;
+    }
+  },
+
+  formulaSchema(body, res) {
+    const schema = joi.object({
+      formula: joi.string().required(),
     });
 
     const validationResult = schema.validate(body);

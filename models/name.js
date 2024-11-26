@@ -8,7 +8,12 @@ const categories = Object.values(CATEGORIES);
 module.exports = (sequelize, DataTypes) => {
   class Name extends Model {
     static associate(models) {
-      this.hasMany(models.Data, { foreignKey: { field: "name" }, as: "Data" });
+      // Name.hasMany(models.Data, { foreignKey: "name", as: "Data" });
+
+      this.belongsTo(models.User, {
+        foreignKey: { field: "userId" },
+        as: "CreatedBy",
+      });
     }
   }
 
@@ -31,6 +36,10 @@ module.exports = (sequelize, DataTypes) => {
       },
       category: {
         type: DataTypes.ENUM(categories),
+        allowNull: false,
+      },
+      synonym: {
+        type: DataTypes.STRING,
         allowNull: false,
       },
     },

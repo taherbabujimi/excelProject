@@ -28,5 +28,8 @@ module.exports = {
     errorUpdatingData: "Error updating data",
     errorCreatingData: "Error creating new data",
     errorInExcelFile: "There is error inside Excel file.",
+    errorAddingFormula: "Something went wrong while adding formula.",
+    successAddingFormula: "Formula added successfully.",
+    Formula5NotAllowed: "More than 5 formulas are not allowed",
   },
 };

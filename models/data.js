@@ -5,9 +5,12 @@ const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class Data extends Model {
     static associate(models) {
-      this.belongsTo(models.Name, {
-        foreignKey: { field: "name" },
-        as: "Name",
+      // Data.hasOne(models.Name, { foreignKey: "id", as: "Name" });
+      Data.belongsTo(models.Name, { foreignKey: "name", as: "Name" });
+
+      this.belongsTo(models.User, {
+        foreignKey: { field: "createdBy" },
+        as: "CreatedBy",
       });
     }
   }
@@ -21,6 +24,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       name: {
         type: DataTypes.INTEGER,
+        references: { model: "names", key: "id" },
         allowNull: false,
       },
       date: {
@@ -29,6 +33,10 @@ module.exports = (sequelize, DataTypes) => {
       },
       amount: {
         type: DataTypes.FLOAT,
+        allowNull: false,
+      },
+      createdBy: {
+        type: DataTypes.INTEGER,
         allowNull: false,
       },
     },
