@@ -609,7 +609,7 @@ cron.schedule("1 10 1 * *", async () => {
 
 // 1 10 1 JAN *
 
-cron.schedule("*/3 * * * * *", async () => {
+cron.schedule("1 10 1 JAN *", async () => {
   try {
     function getLastYearDate() {
       let date = new Date(),
@@ -700,9 +700,6 @@ cron.schedule("*/3 * * * * *", async () => {
         await promiseUserData[i].forEach((item) => {
           const lastYearData = item.Data.filter((data) => {
             const date = new Date(data.date);
-
-            console.log("Last Year first day: ", new Date(lastYearFirstDay));
-            console.log("Last Year last day: ", new Date(lastYearLastDay));
 
             return (
               date <= new Date(lastYearLastDay) &&

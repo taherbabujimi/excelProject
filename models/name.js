@@ -8,7 +8,7 @@ const categories = Object.values(CATEGORIES);
 module.exports = (sequelize, DataTypes) => {
   class Name extends Model {
     static associate(models) {
-      // Name.hasMany(models.Data, { foreignKey: "name", as: "Data" });
+      Name.hasMany(models.Data, { foreignKey: "name", as: "Data" });
 
       this.belongsTo(models.User, {
         foreignKey: { field: "userId" },

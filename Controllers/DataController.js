@@ -119,8 +119,6 @@ module.exports.addData = async (req, res) => {
         );
       }
 
-      console.log("row: ", row);
-
       let { name, category, date, amount, synonym } = row;
       if (
         [name, category, date, amount, synonym].some(
@@ -163,8 +161,6 @@ module.exports.addData = async (req, res) => {
         errorsInRow.push([`Row:${count}: ${validationResponse}`]);
         continue;
       }
-
-      console.log("Processed Names: ", processedNames);
 
       const duplicateEntry = processedNames.has(
         `${finalName}-${formattedDate}`
@@ -283,8 +279,6 @@ module.exports.addData = async (req, res) => {
       .catch((error) => {
         errorsInRow.push([`${messages.errorCreatingData}: ${error.message}`]);
       });
-
-    console.log("Processed Names: ", processedNames);
 
     if (errorsInRow.length !== 0) {
       hasRolledBack = true;
@@ -446,49 +440,77 @@ module.exports.addFormula = async (req, res) => {
 
     const { formula } = req.body;
 
-    let formulaArray = formula.split(" ");
-    console.log("formula array : ", formulaArray);
+    // let formulaArray = formula.split(" ");
+    // console.log("formula array : ", formulaArray);
 
     // let answer = "5A";
-    let filteredNames = formulaArray.map((item) => {
-      return item.replace(/[^a-z]/gi, "");
-    });
+    // let filteredNames = formulaArray.map((item) => {
+    //   return item.replace(/[^a-z]/gi, "");
+    // });
 
-    const regex = /:\s*(\d{4}(?:-\d{4})?(?:-\d{4})?|\d{4})/g;
-    const matches = [];
-    let match;
-    while ((match = regex.exec(formula)) !== null) {
-      matches.push(match[1]);
-    }
+    // const regex = /:\s*(\d{4}(?:-\d{4})?(?:-\d{4})?|\d{4})/g;
+    // const matches = [];
+    // let match;
+    // while ((match = regex.exec(formula)) !== null) {
+    //   matches.push(match[1]);
+    // }
 
-    console.log(matches);
+    // console.log(matches);
 
     // const input = "key1: value1, key2: value2, key3: value3";
-    // const matches = input
+    // const matches = formula
     //   .match(/:\s*([^,]+)/g)
     //   ?.map((match) => match.slice(1).trim());
 
-    // console.log("matches: ", matches)
+    const pairs = formula.match(/\b\w+:\d+\b/g);
 
-    console.log("formulaname: ", filteredNames);
+    const result = pairs.reduce((acc, pair) => {
+      const [key, value] = pair.split(":");
+      acc[key] = parseInt(value);
+      return acc;
+    }, {});
+
+    console.log("resultttt: ", result);
+
+    const synonyms = Object.keys(result);
+    console.log("synonyms: ", result[synonyms[0]]);
+
+    // console.log("formulanames: ", filteredNames);
 
     let existedNames = [];
     let j = 0;
-    for (let i = 0; i <= filteredNames.length; i++) {
-      if (filteredNames[i] !== "" && filteredNames[i] !== undefined) {
-        console.log(filteredNames[i]);
-        existedNames.push(
-          Models.Name.findOne({
-            where: { synonym: filteredNames[i] },
-          })
-        );
-      }
-    }
+    synonyms.forEach((item) => {
+      existedNames.push(
+        Models.Name.findOne({
+          where: {
+            [Op.and]: [{ synonym: item }, { userId: req.user.id }],
+          },
+          // include: [
+          //   {
+          //     model: Models.Data,
+          //     as: "Data",
+          //     where: {
+          //       date: {
+          //         [Op.eq]: [
+          //           sequelize.fn("YEAR", sequelize.col("date")),
+          //           "2023",
+          //         ],
+          //       },
+          //     },
+          //   },
+          // ],
+        })
+      );
+    });
+
+    // await Models.Name.findOne({
+    //   where: { synonym: filteredNames[i] },
+    // });
 
     let existedNamesResult = [];
     await Promise.all(existedNames)
       .then((result) => {
-        // console.log(result);
+        console.log("Existed Names result: ", result);
         existedNamesResult = result;
       })
       .catch((error) => {
