@@ -440,72 +440,71 @@ module.exports.addFormula = async (req, res) => {
 
     const { formula } = req.body;
 
-    // let formulaArray = formula.split(" ");
-    // console.log("formula array : ", formulaArray);
-
-    // let answer = "5A";
-    // let filteredNames = formulaArray.map((item) => {
-    //   return item.replace(/[^a-z]/gi, "");
-    // });
-
-    // const regex = /:\s*(\d{4}(?:-\d{4})?(?:-\d{4})?|\d{4})/g;
-    // const matches = [];
-    // let match;
-    // while ((match = regex.exec(formula)) !== null) {
-    //   matches.push(match[1]);
-    // }
-
-    // console.log(matches);
-
-    // const input = "key1: value1, key2: value2, key3: value3";
-    // const matches = formula
-    //   .match(/:\s*([^,]+)/g)
-    //   ?.map((match) => match.slice(1).trim());
-
-    const pairs = formula.match(/\b\w+:\d+\b/g);
+    const pairs = formula.match(
+      /\b\w+:(\d{4}-\d{2}-\d{2}|\d{4}-\d{2}|\d{4})\b/g
+    );
 
     const result = pairs.reduce((acc, pair) => {
       const [key, value] = pair.split(":");
-      acc[key] = parseInt(value);
+      const date = value.split("-");
+      if (date.length === 3) {
+        acc[key] = `${date[0]}-${date[1]}-${date[2]}`;
+      } else if (date.length === 2) {
+        acc[key] = `${date[0]}-${date[1]}`;
+      } else {
+        acc[key] = date[0];
+      }
       return acc;
     }, {});
 
-    console.log("resultttt: ", result);
-
     const synonyms = Object.keys(result);
-    console.log("synonyms: ", result[synonyms[0]]);
-
-    // console.log("formulanames: ", filteredNames);
 
     let existedNames = [];
     let j = 0;
     synonyms.forEach((item) => {
+      console.log("Year: ", result[item]);
+      let date = result[item].split("-");
+
+      let firstDate;
+      let lastDate;
+      if (date.length === 2) {
+        firstDate = new Date(result[item]);
+        lastDate = new Date(
+          firstDate.getFullYear(),
+          firstDate.getMonth() + 1,
+          0
+        );
+        lastDate = new Date(
+          lastDate.getTime() + Math.abs(lastDate.getTimezoneOffset() * 60000)
+        );
+      } else if (date.length === 1) {
+        firstDate = new Date(result[item]);
+        lastDate = new Date(firstDate.getFullYear(), 11, 31);
+        lastDate = new Date(
+          lastDate.getTime() + Math.abs(lastDate.getTimezoneOffset() * 60000)
+        );
+      }
+
       existedNames.push(
         Models.Name.findOne({
           where: {
             [Op.and]: [{ synonym: item }, { userId: req.user.id }],
           },
-          // include: [
-          //   {
-          //     model: Models.Data,
-          //     as: "Data",
-          //     where: {
-          //       date: {
-          //         [Op.eq]: [
-          //           sequelize.fn("YEAR", sequelize.col("date")),
-          //           "2023",
-          //         ],
-          //       },
-          //     },
-          //   },
-          // ],
+          include: [
+            {
+              model: Models.Data,
+              as: "Data",
+              where: {
+                date: {
+                  [Op.gte]: firstDate,
+                  [Op.lte]: lastDate,
+                },
+              },
+            },
+          ],
         })
       );
     });
-
-    // await Models.Name.findOne({
-    //   where: { synonym: filteredNames[i] },
-    // });
 
     let existedNamesResult = [];
     await Promise.all(existedNames)
@@ -515,14 +514,17 @@ module.exports.addFormula = async (req, res) => {
       })
       .catch((error) => {
         console.log(error);
+        return errorResponseWithoutData(
+          res,
+          "Something went wrong while fetching the data.",
+          400
+        );
       });
-
-    // console.log("Existed names result: ", existedNamesResult);
 
     if (existedNamesResult.includes(null)) {
       return errorResponseWithoutData(
         res,
-        "Please provide valid synonyms in the formula",
+        "Data with this synonyms don't exists within given date.",
         400
       );
     }
@@ -536,8 +538,6 @@ module.exports.addFormula = async (req, res) => {
     if (existedUserFormula === 5) {
       return errorResponseWithoutData(res, messages.Formula5NotAllowed, 400);
     }
-
-    console.log(existedUserFormula);
 
     const addFormula = await Models.Formula.create({
       formula: formula,

@@ -18,10 +18,10 @@ module.exports = (sequelize, DataTypes) => {
         as: "Data",
       });
 
-      this.hasMany(models.Name, {
-        foreignKey: { field: "userId" },
-        as: "Name",
-      });
+      // this.hasMany(models.Name, {
+      //   foreignKey: { field: "userId" },
+      //   as: "Name",
+      // });
     }
   }
   User.init(
