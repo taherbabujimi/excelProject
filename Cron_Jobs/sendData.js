@@ -3,10 +3,190 @@ const { messages } = require("../services/messages");
 const xlsx = require("xlsx");
 const { Op } = require("sequelize");
 const cron = require("node-cron");
+const { sequelize } = require("../models/index");
+
+async function calculateFormulas(userId) {
+  try {
+    const user = await Models.User.findOne({
+      where: {
+        id: userId,
+      },
+      include: [
+        {
+          model: Models.Formula,
+          as: "Formula",
+        },
+      ],
+    });
+
+    let userName = user.dataValues.username;
+
+    console.log(user.dataValues.Formula.length);
+
+    if (user.dataValues.Formula.length === 0) {
+      console.log("no data");
+      return false;
+    }
+
+    let excelData = [];
+
+    let existedNames = [];
+
+    for (const formulaItem of user.dataValues.Formula) {
+      let formula = formulaItem.dataValues.formula;
+      let formulaName = formulaItem.dataValues.formulaName;
+
+      const pairs = formula.match(
+        /\b\w+:(\d{4}-\d{2}-\d{2}|\d{4}-\d{2}|\d{4})\b/g
+      );
+
+      const result = pairs.reduce((acc, pair) => {
+        const [key, value] = pair.split(":");
+        const date = value.split("-");
+        if (date.length === 3) {
+          acc[key] = `${date[0]}-${date[1]}-${date[2]}`;
+        } else if (date.length === 2) {
+          acc[key] = `${date[0]}-${date[1]}`;
+        } else {
+          acc[key] = date[0];
+        }
+        return acc;
+      }, {});
+
+      const synonyms = Object.keys(result);
+
+      let j = 0;
+      let existedNamesResult = [];
+      for (const item of synonyms) {
+        let date = result[item].split("-");
+
+        let firstDate;
+        let lastDate;
+        if (date.length === 2) {
+          firstDate = new Date(result[item]);
+          lastDate = new Date(
+            firstDate.getFullYear(),
+            firstDate.getMonth() + 1,
+            0
+          );
+          lastDate = new Date(
+            lastDate.getTime() + Math.abs(lastDate.getTimezoneOffset() * 60000)
+          );
+        } else if (date.length === 1) {
+          firstDate = new Date(result[item]);
+          lastDate = new Date(firstDate.getFullYear(), 11, 31);
+          lastDate = new Date(
+            lastDate.getTime() + Math.abs(lastDate.getTimezoneOffset() * 60000)
+          );
+        }
+
+        existedNames.push(
+          Models.Name.findOne({
+            where: {
+              [Op.and]: [{ synonym: item }, { userId: userId }],
+            },
+            include: [
+              {
+                model: Models.Data,
+                as: "Data",
+                where: {
+                  [Op.and]: [
+                    {
+                      date: {
+                        [Op.gte]: firstDate,
+                        [Op.lte]: lastDate,
+                      },
+                    },
+                    {
+                      createdBy: userId,
+                    },
+                  ],
+                },
+                attributes: [
+                  [sequelize.fn("SUM", sequelize.col("amount")), "totalAmount"],
+                ],
+
+                required: false,
+              },
+            ],
+          })
+        );
+      }
+      await Promise.all(existedNames)
+        .then((result) => {
+          existedNamesResult = result;
+        })
+        .catch((error) => {
+          console.log(error);
+          return errorResponseWithoutData(
+            res,
+            "Something went wrong while fetching the data.",
+            400
+          );
+        });
+
+      let totalArray = [];
+
+      for (const item of existedNamesResult) {
+        if (item.id === null) {
+          console.log("Item is null");
+          totalArray.push(null);
+          continue;
+        }
+
+        let itemTotal = item.Data[0].dataValues.totalAmount;
+
+        totalArray.push(itemTotal);
+      }
+
+      const nameDatePatterns = formula.match(
+        /(\w+):(\d{4}-\d{2}-\d{2}|\d{4}-\d{2}|\d{4})/g
+      );
+
+      if (totalArray.includes(null)) {
+        console.log("Invalid formula: ", formula);
+        excelData.push({
+          [formulaName]: "Data For this formula not found",
+        });
+        continue;
+      }
+
+      const replacedFormula = nameDatePatterns.reduce((acc, pattern) => {
+        const [name, date] = pattern.split(":");
+        const index = totalArray.findIndex(
+          (value, index) => index === nameDatePatterns.indexOf(pattern)
+        );
+        if (index !== -1) {
+          return acc.replace(pattern, totalArray[index]);
+        } else {
+          return acc;
+        }
+      }, formula);
+
+      const calculatedResult = eval(replacedFormula);
+
+      excelData.push({ [formulaName]: calculatedResult.toFixed(2) });
+
+      existedNames = [];
+
+      console.log(`${formula} :`, replacedFormula);
+    }
+
+    const excelDataRows = excelData.map((data) => {
+      const formulaName = Object.keys(data)[0];
+      const value = data[formulaName];
+      return [formulaName, value];
+    });
+
+    return excelDataRows;
+  } catch (error) {
+    console.log(`${messages.somethingWentWrong} : ${error}`);
+  }
+}
 
 //*/3 * * * * *
 
-// 1 10 1 * *
+//1 10 1 * *
 
 cron.schedule("1 10 1 * *", async () => {
   try {
@@ -48,9 +228,6 @@ cron.schedule("1 10 1 * *", async () => {
     let formattedFirstDay = formatFirstDate(firstDay, "yy-mm-dd");
     let formattedLastDay = formatLastDate(lastDay, "yy-mm-dd");
 
-    // console.log("First day =", formattedFirstDay);
-    // console.log("Last day = ", formattedLastDay);
-
     const users = await Models.User.count({});
 
     let offset = users / 10;
@@ -83,7 +260,6 @@ cron.schedule("1 10 1 * *", async () => {
 
     await Promise.all(userData)
       .then((result) => {
-        console.log(result);
         promiseUserData = result;
       })
       .catch((error) => {
@@ -93,23 +269,13 @@ cron.schedule("1 10 1 * *", async () => {
     let filterredData = [];
     for (let i = 0; i < promiseUserData.length; i++) {
       promiseUserData[i].map((item) => {
-        console.log("ttttttttttttttttttttt: ", item.dataValues);
         if (item.dataValues.Data.length !== 0) {
           filterredData.push(item);
         }
       });
     }
 
-    console.log(
-      "Filterred Data with each user data: ",
-      JSON.stringify(filterredData)
-    );
-
-    console.log("filtered data length: ", filterredData.length);
-
     for (let i = 0; i < filterredData.length; i++) {
-      console.log("dataCount: ", filterredData[i].Data.length);
-
       let filterData = [];
 
       filterredData[i].Data.map((item) => {
@@ -120,8 +286,6 @@ cron.schedule("1 10 1 * *", async () => {
           amount: item.amount,
         });
       });
-
-      console.log("filterrrr: ", filterData);
 
       let nameTotal = {};
       let categoryTotal = {};
@@ -140,31 +304,54 @@ cron.schedule("1 10 1 * *", async () => {
         }
       });
 
-      console.log("Category total: ", categoryTotal);
-
       const total = filterData.reduce((sum, item) => sum + item.amount, 0);
 
-      console.log("Total: ", total);
+      let solvedFormulas = await calculateFormulas(filterredData[i].id);
 
       const workbook = xlsx.utils.book_new();
-      const worksheet = xlsx.utils.aoa_to_sheet([
-        ["name", "category", "date", "amount"],
-        ...filterData.map((item) => [
-          item.name,
-          item.category,
-          item.date,
-          item.amount,
-        ]),
-        [],
-        ["Grand Total", total],
-        [],
-        ...Object.entries(categoryTotal).map(([key, value]) => [key, value]),
-        [],
-        ...Object.entries(nameTotal).map(([key, value]) => [key, value]),
-      ]);
+
+      let worksheet;
+
+      if (solvedFormulas === false) {
+        worksheet = xlsx.utils.aoa_to_sheet([
+          ["name", "category", "date", "amount"],
+          ...filterData.map((item) => [
+            item.name,
+            item.category,
+            item.date,
+            item.amount,
+          ]),
+          [],
+          ["Grand Total", total],
+          [],
+          ...Object.entries(categoryTotal).map(([key, value]) => [key, value]),
+          [],
+          ...Object.entries(nameTotal).map(([key, value]) => [key, value]),
+        ]);
+      } else {
+        worksheet = xlsx.utils.aoa_to_sheet([
+          ["name", "category", "date", "amount"],
+          ...filterData.map((item) => [
+            item.name,
+            item.category,
+            item.date,
+            item.amount,
+          ]),
+          [],
+          ["Grand Total", total],
+          [],
+          ...Object.entries(categoryTotal).map(([key, value]) => [key, value]),
+          [],
+          ...Object.entries(nameTotal).map(([key, value]) => [key, value]),
+          [],
+          ["Formula", "CalculatedValue"],
+          ...solvedFormulas,
+        ]);
+      }
+
       var wscols = [
-        { wch: 10 },
-        { wch: 10 },
+        { wch: 15 },
+        { wch: 15 },
         { wch: 10 },
         { wch: 10 },
         { wch: 10 },
@@ -173,31 +360,6 @@ cron.schedule("1 10 1 * *", async () => {
       xlsx.utils.book_append_sheet(workbook, worksheet, "Sheet1");
       xlsx.writeFile(workbook, `${filterredData[i].username}MonthlyData.xlsx`);
     }
-    //   where: {
-    //     date: {
-    //       [Op.gte]: new Date(formattedFirstDay),
-    //       [Op.lte]: new Date(formattedLastDay),
-    //     },
-    //   },
-    //   include: [
-    //     {
-    //       model: Models.Name,
-    //       as: "Name",
-    //       attributes: [],
-    //     },
-    //   ],
-    //   attributes: [
-    //     [
-    //       Models.Sequelize.fn("SUM", Models.Sequelize.col("amount")),
-    //       "totalAmount",
-    //     ],
-    //     [Models.Sequelize.col("Name.category"), "category"],
-    //   ],
-    //   group: ["Name.category"],
-    //   raw: true,
-    // });
-
-    // console.log("category total: ", categoryTotal);
   } catch (error) {
     console.log(`${messages.somethingWentWrong} : ${error}`);
   }
@@ -208,7 +370,7 @@ cron.schedule("1 10 1 * *", async () => {
 cron.schedule("1 10 * * MON", async () => {
   try {
     function getLastWeekDates() {
-      var today = new Date("2024-11-11T06:39:00.605Z");
+      var today = new Date();
       console.log("today: ", today);
       var lastWeek = new Date(
         today.getFullYear(),
@@ -266,7 +428,7 @@ cron.schedule("1 10 * * MON", async () => {
 
     await Promise.all(userData)
       .then((result) => {
-        console.log(result);
+        // console.log(result);
         promiseUserData = result;
       })
       .catch((error) => {
@@ -276,24 +438,17 @@ cron.schedule("1 10 * * MON", async () => {
     let filterredData = [];
     for (let i = 0; i < promiseUserData.length; i++) {
       promiseUserData[i].map((item) => {
-        console.log("ttttttttttttttttttttt: ", item.dataValues);
         if (item.dataValues.Data.length !== 0) {
           filterredData.push(item);
         }
       });
+      // console.log("Promise user data: ", promiseUserData[i]);
     }
 
-    console.log(
-      "Filterred Data with each user data: ",
-      JSON.stringify(filterredData)
-    );
-
-    console.log("filtered data length: ", filterredData.length);
-
     for (let i = 0; i < filterredData.length; i++) {
-      console.log("dataCount: ", filterredData[i].Data.length);
-
       let filterData = [];
+
+      console.log("Consol;e", filterredData[i].id);
 
       filterredData[i].Data.map((item) => {
         return filterData.push({
@@ -303,8 +458,6 @@ cron.schedule("1 10 * * MON", async () => {
           amount: item.amount,
         });
       });
-
-      console.log("filterrrr: ", filterData);
 
       let nameTotal = {};
       let categoryTotal = {};
@@ -323,31 +476,54 @@ cron.schedule("1 10 * * MON", async () => {
         }
       });
 
-      console.log("Category total: ", categoryTotal);
-
       const total = filterData.reduce((sum, item) => sum + item.amount, 0);
 
-      console.log("Total: ", total);
+      let solvedFormulas = await calculateFormulas(filterredData[i].id);
 
       const workbook = xlsx.utils.book_new();
-      const worksheet = xlsx.utils.aoa_to_sheet([
-        ["name", "category", "date", "amount"],
-        ...filterData.map((item) => [
-          item.name,
-          item.category,
-          item.date,
-          item.amount,
-        ]),
-        [],
-        ["Grand Total", total],
-        [],
-        ...Object.entries(categoryTotal).map(([key, value]) => [key, value]),
-        [],
-        ...Object.entries(nameTotal).map(([key, value]) => [key, value]),
-      ]);
+
+      let worksheet;
+
+      if (solvedFormulas === false) {
+        worksheet = xlsx.utils.aoa_to_sheet([
+          ["name", "category", "date", "amount"],
+          ...filterData.map((item) => [
+            item.name,
+            item.category,
+            item.date,
+            item.amount,
+          ]),
+          [],
+          ["Grand Total", total],
+          [],
+          ...Object.entries(categoryTotal).map(([key, value]) => [key, value]),
+          [],
+          ...Object.entries(nameTotal).map(([key, value]) => [key, value]),
+        ]);
+      } else {
+        worksheet = xlsx.utils.aoa_to_sheet([
+          ["name", "category", "date", "amount"],
+          ...filterData.map((item) => [
+            item.name,
+            item.category,
+            item.date,
+            item.amount,
+          ]),
+          [],
+          ["Grand Total", total],
+          [],
+          ...Object.entries(categoryTotal).map(([key, value]) => [key, value]),
+          [],
+          ...Object.entries(nameTotal).map(([key, value]) => [key, value]),
+          [],
+          ["Formula", "CalculatedValue"],
+          ...solvedFormulas,
+        ]);
+      }
+
       var wscols = [
-        { wch: 10 },
-        { wch: 10 },
+        { wch: 15 },
+        { wch: 15 },
         { wch: 10 },
         { wch: 10 },
         { wch: 10 },
@@ -484,7 +660,7 @@ cron.schedule("1 10 1 * *", async () => {
 
     for (let i = 0; i < promiseUserData.length; i++) {
       if (promiseUserData[i].length !== 0) {
-        await promiseUserData[i].forEach((item) => {
+        await promiseUserData[i].forEach(async (item) => {
           // console.log("Item: ", item.Data);
           const lastMonthData = item.Data.filter((data) => {
             const date = new Date(data.date);
@@ -559,33 +735,66 @@ cron.schedule("1 10 1 * *", async () => {
             }
           });
 
+          let solvedFormulas = await calculateFormulas(item.dataValues.id);
+
           const workbook = xlsx.utils.book_new();
-          worksheet = xlsx.utils.aoa_to_sheet([
-            [
-              "category",
-              lastToLastMonthName,
-              lastMonthName,
-              "Absolute Difference",
-              "Percentage Difference",
-            ],
-            ...Object.keys(lastMonthCategoryTotal).map((category) => [
-              category,
-              lastToLastMonthCategoryTotal[category],
-              lastMonthCategoryTotal[category],
-              lastMonthCategoryTotal[category] -
+
+          let worksheet;
+
+          if (solvedFormulas === false) {
+            worksheet = xlsx.utils.aoa_to_sheet([
+              [
+                "category",
+                lastToLastMonthName,
+                lastMonthName,
+                "Absolute Difference",
+                "Percentage Difference",
+              ],
+              ...Object.keys(lastMonthCategoryTotal).map((category) => [
+                category,
                 lastToLastMonthCategoryTotal[category],
-              `${(
-                ((lastMonthCategoryTotal[category] -
-                  lastToLastMonthCategoryTotal[category]) /
-                  lastToLastMonthCategoryTotal[category]) *
-                100
-              ).toFixed(2)}%`,
-            ]),
-          ]);
+                lastMonthCategoryTotal[category],
+                lastMonthCategoryTotal[category] -
+                  lastToLastMonthCategoryTotal[category],
+                `${(
+                  ((lastMonthCategoryTotal[category] -
+                    lastToLastMonthCategoryTotal[category]) /
+                    lastToLastMonthCategoryTotal[category]) *
+                  100
+                ).toFixed(2)}%`,
+              ]),
+            ]);
+          } else {
+            worksheet = xlsx.utils.aoa_to_sheet([
+              [
+                "category",
+                lastToLastMonthName,
+                lastMonthName,
+                "Absolute Difference",
+                "Percentage Difference",
+              ],
+              ...Object.keys(lastMonthCategoryTotal).map((category) => [
+                category,
+                lastToLastMonthCategoryTotal[category],
+                lastMonthCategoryTotal[category],
+                lastMonthCategoryTotal[category] -
+                  lastToLastMonthCategoryTotal[category],
+                `${(
+                  ((lastMonthCategoryTotal[category] -
+                    lastToLastMonthCategoryTotal[category]) /
+                    lastToLastMonthCategoryTotal[category]) *
+                  100
+                ).toFixed(2)}%`,
+              ]),
+              [],
+              ["Formula", "CalculatedValue"],
+              ...solvedFormulas,
+            ]);
+          }
 
           var wscols = [
-            { wch: 10 },
-            { wch: 10 },
+            { wch: 15 },
+            { wch: 15 },
             { wch: 10 },
             { wch: 16 },
             { wch: 18 },
@@ -654,7 +863,7 @@ cron.schedule("1 10 1 JAN *", async () => {
     const { lastToLastYearFirstDay, lastToLastYearLastDay, lastToLastYear } =
       getLastToLastMonthDate();
 
-    console.log("yearL: ", lastToLastYear);
+    // console.log("yearL: ", lastToLastYear);
 
     const users = await Models.User.count({});
 
@@ -688,7 +897,7 @@ cron.schedule("1 10 1 JAN *", async () => {
 
     await Promise.all(userData)
       .then((result) => {
-        console.log(JSON.stringify(result));
+        // console.log(JSON.stringify(result));
         promiseUserData = result;
       })
       .catch((error) => {
@@ -697,7 +906,7 @@ cron.schedule("1 10 1 JAN *", async () => {
 
     for (let i = 0; i < promiseUserData.length; i++) {
       if (promiseUserData[i].length !== 0) {
-        await promiseUserData[i].forEach((item) => {
+        await promiseUserData[i].forEach(async (item) => {
           const lastYearData = item.Data.filter((data) => {
             const date = new Date(data.date);
 
@@ -753,33 +962,67 @@ cron.schedule("1 10 1 JAN *", async () => {
             }
           });
 
-          const workbook = xlsx.utils.book_new();
-          worksheet = xlsx.utils.aoa_to_sheet([
-            [
-              "category",
-              lastToLastYear,
-              lastYear,
-              "Absolute Difference",
-              "Percentage Difference",
-            ],
-            ...Object.keys(lastYearCategoryTotal).map((category) => [
-              category,
-              lastToLastYearCategoryTotal[category],
-              lastYearCategoryTotal[category],
-              lastYearCategoryTotal[category] -
-                lastToLastYearCategoryTotal[category],
-              `${(
-                ((lastYearCategoryTotal[category] -
-                  lastToLastYearCategoryTotal[category]) /
-                  lastToLastYearCategoryTotal[category]) *
-                100
-              ).toFixed(2)}%`,
-            ]),
-          ]);
+          let solvedFormulas = await calculateFormulas(item.dataValues.id);
 
-          var wscols = [
-            { wch: 10 },
-            { wch: 10 },
+          const workbook = xlsx.utils.book_new();
+          let worksheet;
+
+          if (solvedFormulas === false) {
+            // console.log("solved :", solvedFormulas);
+            worksheet = xlsx.utils.aoa_to_sheet([
+              [
+                "category",
+                lastToLastYear,
+                lastYear,
+                "Absolute Difference",
+                "Percentage Difference",
+              ],
+              ...Object.keys(lastYearCategoryTotal).map((category) => [
+                category,
+                lastToLastYearCategoryTotal[category],
+                lastYearCategoryTotal[category],
+                lastYearCategoryTotal[category] -
+                  lastToLastYearCategoryTotal[category],
+                `${(
+                  ((lastYearCategoryTotal[category] -
+                    lastToLastYearCategoryTotal[category]) /
+                    lastToLastYearCategoryTotal[category]) *
+                  100
+                ).toFixed(2)}%`,
+              ]),
+            ]);
+          } else {
+            // console.log("solved :", solvedFormulas);
+            worksheet = xlsx.utils.aoa_to_sheet([
+              [
+                "category",
+                lastToLastYear,
+                lastYear,
+                "Absolute Difference",
+                "Percentage Difference",
+              ],
+              ...Object.keys(lastYearCategoryTotal).map((category) => [
+                category,
+                lastToLastYearCategoryTotal[category],
+                lastYearCategoryTotal[category],
+                lastYearCategoryTotal[category] -
+                  lastToLastYearCategoryTotal[category],
+                `${(
+                  ((lastYearCategoryTotal[category] -
+                    lastToLastYearCategoryTotal[category]) /
+                    lastToLastYearCategoryTotal[category]) *
+                  100
+                ).toFixed(2)}%`,
+              ]),
+              [],
+              ["Formula", "CalculatedValue"],
+              ...solvedFormulas,
+            ]);
+          }
+
+          let wscols = [
+            { wch: 15 },
+            { wch: 15 },
             { wch: 10 },
             { wch: 16 },
             { wch: 18 },
@@ -800,13 +1043,3 @@ cron.schedule("1 10 1 JAN *", async () => {
     console.log(`${messages.somethingWentWrong} : ${error}`);
   }
 });
-
-// Formula
-
-// cron.schedule("*/30 * * * * *", async () => {
-//   try {
-//     const
-//   } catch (error) {
-//     console.log(`${messages.somethingWentWrong} : ${error}`);
-//   }
-// });

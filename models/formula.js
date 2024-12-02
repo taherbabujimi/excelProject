@@ -29,6 +29,10 @@ module.exports = (sequelize, Datatypes) => {
         references: { model: "users", key: "id" },
         allowNull: false,
       },
+      formulaName: {
+        type: Datatypes.STRING,
+        allowNull: false,
+      },
     },
     {
       sequelize,

@@ -57,6 +57,7 @@ module.exports = {
   formulaSchema(body, res) {
     const schema = joi.object({
       formula: joi.string().required(),
+      formulaName: joi.string().min(3).max(30),
     });
 
     const validationResult = schema.validate(body);

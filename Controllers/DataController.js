@@ -438,7 +438,7 @@ module.exports.addFormula = async (req, res) => {
 
     if (validationResponse !== false) return;
 
-    const { formula } = req.body;
+    const { formula, formulaName } = req.body;
 
     const pairs = formula.match(
       /\b\w+:(\d{4}-\d{2}-\d{2}|\d{4}-\d{2}|\d{4})\b/g
@@ -495,10 +495,17 @@ module.exports.addFormula = async (req, res) => {
               model: Models.Data,
               as: "Data",
               where: {
-                date: {
-                  [Op.gte]: firstDate,
-                  [Op.lte]: lastDate,
-                },
+                [Op.and]: [
+                  {
+                    date: {
+                      [Op.gte]: firstDate,
+                      [Op.lte]: lastDate,
+                    },
+                  },
+                  {
+                    createdBy: req.user.id,
+                  },
+                ],
               },
             },
           ],
@@ -542,6 +549,7 @@ module.exports.addFormula = async (req, res) => {
     const addFormula = await Models.Formula.create({
       formula: formula,
       createdBy: req.user.id,
+      formulaName: formulaName,
     });
 
     if (!addFormula) {
