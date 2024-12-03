@@ -19,9 +19,9 @@ async function calculateFormulas(userId) {
       ],
     });
 
-    let userName = user.dataValues.username;
+    console.log("User: ", JSON.stringify(user));
 
-    console.log(user.dataValues.Formula.length);
+    let userName = user.dataValues.username;
 
     if (user.dataValues.Formula.length === 0) {
       console.log("no data");
@@ -40,90 +40,109 @@ async function calculateFormulas(userId) {
         /\b\w+:(\d{4}-\d{2}-\d{2}|\d{4}-\d{2}|\d{4})\b/g
       );
 
+      console.log("pairs: ", pairs);
+
       const result = pairs.reduce((acc, pair) => {
         const [key, value] = pair.split(":");
         const date = value.split("-");
         if (date.length === 3) {
-          acc[key] = `${date[0]}-${date[1]}-${date[2]}`;
+          acc[key] = acc[key] || [];
+          acc[key].push(`${date[0]}-${date[1]}-${date[2]}`);
         } else if (date.length === 2) {
-          acc[key] = `${date[0]}-${date[1]}`;
+          acc[key] = acc[key] || [];
+          acc[key].push(`${date[0]}-${date[1]}`);
         } else {
-          acc[key] = date[0];
+          acc[key] = acc[key] || [];
+          acc[key].push(date[0]);
         }
         return acc;
       }, {});
 
+      console.log("result: ", result);
+
       const synonyms = Object.keys(result);
+      console.log("synonyms: ", synonyms);
 
       let j = 0;
       let existedNamesResult = [];
       for (const item of synonyms) {
-        let date = result[item].split("-");
+        console.log("item: ", item);
+        console.log(result[item].length);
 
-        let firstDate;
-        let lastDate;
-        if (date.length === 2) {
-          firstDate = new Date(result[item]);
-          lastDate = new Date(
-            firstDate.getFullYear(),
-            firstDate.getMonth() + 1,
-            0
-          );
-          lastDate = new Date(
-            lastDate.getTime() + Math.abs(lastDate.getTimezoneOffset() * 60000)
-          );
-        } else if (date.length === 1) {
-          firstDate = new Date(result[item]);
-          lastDate = new Date(firstDate.getFullYear(), 11, 31);
-          lastDate = new Date(
-            lastDate.getTime() + Math.abs(lastDate.getTimezoneOffset() * 60000)
+        for (let i = 0; i < result[item].length; i++) {
+          let date = result[item][i].split("-");
+
+          let firstDate;
+          let lastDate;
+          if (date.length === 2) {
+            firstDate = new Date(result[item][i]);
+            lastDate = new Date(
+              firstDate.getFullYear(),
+              firstDate.getMonth() + 1,
+              0
+            );
+            lastDate = new Date(
+              lastDate.getTime() +
+                Math.abs(lastDate.getTimezoneOffset() * 60000)
+            );
+          } else if (date.length === 1) {
+            firstDate = new Date(result[item][i]);
+            lastDate = new Date(firstDate.getFullYear(), 11, 31);
+            lastDate = new Date(
+              lastDate.getTime() +
+                Math.abs(lastDate.getTimezoneOffset() * 60000)
+            );
+          }
+
+          existedNames.push(
+            Models.Name.findOne({
+              where: {
+                [Op.and]: [{ synonym: item }, { userId: userId }],
+              },
+              include: [
+                {
+                  model: Models.Data,
+                  as: "Data",
+                  where: {
+                    [Op.and]: [
+                      {
+                        date: {
+                          [Op.gte]: firstDate,
+                          [Op.lte]: lastDate,
+                        },
+                      },
+                      {
+                        createdBy: userId,
+                      },
+                    ],
+                  },
+                  attributes: [
+                    [
+                      sequelize.fn("SUM", sequelize.col("amount")),
+                      "totalAmount",
+                    ],
+                  ],
+
+                  required: false,
+                },
+              ],
+            })
           );
         }
-
-        existedNames.push(
-          Models.Name.findOne({
-            where: {
-              [Op.and]: [{ synonym: item }, { userId: userId }],
-            },
-            include: [
-              {
-                model: Models.Data,
-                as: "Data",
-                where: {
-                  [Op.and]: [
-                    {
-                      date: {
-                        [Op.gte]: firstDate,
-                        [Op.lte]: lastDate,
-                      },
-                    },
-                    {
-                      createdBy: userId,
-                    },
-                  ],
-                },
-                attributes: [
-                  [sequelize.fn("SUM", sequelize.col("amount")), "totalAmount"],
-                ],
-
-                required: false,
-              },
-            ],
+        await Promise.all(existedNames)
+          .then((result) => {
+            console.log(" result: ", JSON.stringify(result));
+            existedNamesResult = result;
           })
-        );
+          .catch((error) => {
+            console.log(error);
+            return errorResponseWithoutData(
+              res,
+              "Something went wrong while fetching the data.",
+              400
+            );
+          });
       }
-      await Promise.all(existedNames)
-        .then((result) => {
-          existedNamesResult = result;
-        })
-        .catch((error) => {
-          console.log(error);
-          return errorResponseWithoutData(
-            res,
-            "Something went wrong while fetching the data.",
-            400
-          );
-        });
 
       let totalArray = [];
 
@@ -134,7 +153,14 @@ async function calculateFormulas(userId) {
           continue;
         }
 
-        let itemTotal = item.Data[0].dataValues.totalAmount;
+        let itemTotal;
+
+        if (item.Data.length === 0) {
+          itemTotal = 0;
+          // continue;
+        } else {
+          itemTotal = item.Data[0].dataValues.totalAmount;
+        }
 
         totalArray.push(itemTotal);
       }
@@ -144,7 +170,6 @@ async function calculateFormulas(userId) {
       );
 
       if (totalArray.includes(null)) {
-        console.log("Invalid formula: ", formula);
         excelData.push({
           [formulaName]: "Data For this formula not found",
         });
@@ -168,8 +193,6 @@ async function calculateFormulas(userId) {
       excelData.push({ [formulaName]: calculatedResult.toFixed(2) });
 
       existedNames = [];
-
-      console.log(`${formula} :`, replacedFormula);
     }
 
     const excelDataRows = excelData.map((data) => {
@@ -180,7 +203,9 @@ async function calculateFormulas(userId) {
 
     return excelDataRows;
   } catch (error) {
-    console.log(`${messages.somethingWentWrong} : ${error}`);
+    console.log(
+      `${messages.somethingWentWrong} in sendData function : ${error}`
+    );
   }
 }
 
@@ -539,7 +564,7 @@ cron.schedule("1 10 * * MON", async () => {
 
 //1 10 1 * *
 
-cron.schedule("1 10 1 * *", async () => {
+cron.schedule("*/3 * * * * *", async () => {
   try {
     function formatFirstDate(date, format) {
       const map = {
@@ -564,7 +589,7 @@ cron.schedule("1 10 1 * *", async () => {
     }
 
     function getLastMonthDate() {
-      let date = new Date(),
+      let date = new Date("2024-03-01T00:00:00.000Z"),
         y = date.getFullYear(),
         m = date.getMonth();
 
@@ -575,7 +600,7 @@ cron.schedule("1 10 1 * *", async () => {
     }
 
     function getLastToLastMonthDate() {
-      let date = new Date(),
+      let date = new Date("2024-03-01T00:00:00.000Z"),
         y = date.getFullYear(),
         m = date.getMonth();
 
@@ -596,7 +621,7 @@ cron.schedule("1 10 1 * *", async () => {
 
     let formattedFirstDay = formatFirstDate(firstDay, "yy-mm-dd");
     let formattedLastDay = formatLastDate(lastDay, "yy-mm-dd");
-    console.log("last month: ", formattedFirstDay, formattedLastDay);
+    // console.log("last month: ", formattedFirstDay, formattedLastDay);
 
     let formattedLastMonthFirstDay = formatFirstDate(
       lastMonthFirstDay,
@@ -606,11 +631,11 @@ cron.schedule("1 10 1 * *", async () => {
       lastMonthLastDay,
       "yy-mm-dd"
     );
-    console.log(
-      "last to last month: ",
-      formattedLastMonthFirstDay,
-      formattedLastMonthLastDay
-    );
+    // console.log(
+    //   "last to last month: ",
+    //   formattedLastMonthFirstDay,
+    //   formattedLastMonthLastDay
+    // );
 
     const users = await Models.User.count({});
 
@@ -626,6 +651,9 @@ cron.schedule("1 10 1 * *", async () => {
 
     let userData = [];
     let promiseUserData = [];
+
+    // console.log(new Date(formattedLastMonthFirstDay));
+    // console.log(new Date(formattedLastDay));
     for (let i = 0; i < offset; i++) {
       let limit = 10;
       userData.push(
@@ -651,7 +679,7 @@ cron.schedule("1 10 1 * *", async () => {
 
     await Promise.all(userData)
       .then((result) => {
-        console.log(JSON.stringify(result));
+        // console.log(JSON.stringify(result));
         promiseUserData = result;
       })
       .catch((error) => {
@@ -691,6 +719,9 @@ cron.schedule("1 10 1 * *", async () => {
               formattedLastDate.getTime() +
                 Math.abs(formattedLastDate.getTimezoneOffset() * 60000)
             );
+
+            // console.log(new Date(formattedLastDate));
+            // console.log(new Date(formattedFirstDate));
 
             return (
               date <= new Date(formattedLastDate) &&
@@ -737,11 +768,13 @@ cron.schedule("1 10 1 * *", async () => {
 
           let solvedFormulas = await calculateFormulas(item.dataValues.id);
 
+          // console.log("Solved formulas: ", solvedFormulas);
+
           const workbook = xlsx.utils.book_new();
 
           let worksheet;
 
-          if (solvedFormulas === false) {
+          if (solvedFormulas === false || solvedFormulas === undefined) {
             worksheet = xlsx.utils.aoa_to_sheet([
               [
                 "category",
