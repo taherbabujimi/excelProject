@@ -440,6 +440,60 @@ module.exports.addFormula = async (req, res) => {
 
     const { formula, formulaName } = req.body;
 
+    const brackets = formula.match(/[\(\)]/g);
+
+    let openingBracketCount = 0;
+    let closingBracketCount = 0;
+
+    for (let i = 0; i < brackets.length; i++) {
+      if (brackets[i] === "(") {
+        openingBracketCount += 1;
+      } else if (brackets[i] === ")") {
+        closingBracketCount += 1;
+      }
+    }
+
+    if (openingBracketCount !== closingBracketCount) {
+      return errorResponseWithoutData(res, messages.improperBrackets);
+    }
+
+    const matches = formula.match(/\(\s*\)+/g);
+    if (matches !== null) {
+      return errorResponseWithoutData(res, messages.emptyBracketsNotAllowed);
+    }
+
+    let num = 2;
+    const replacedFormula = formula.replace(
+      /[a-zA-Z]+:(\d{4}-\d{2}|\d{4})\b/g,
+      (match) => {
+        return `${num}`;
+      }
+    );
+
+    console.log("replaced: ", replacedFormula);
+
+    try {
+      let calculateCheck = eval(replacedFormula);
+      console.log("Calculated result :", calculateCheck);
+
+      if (isNaN(calculateCheck)) {
+        return errorResponseWithoutData(res, messages.invalidFormula);
+      }
+    } catch (error) {
+      console.log("Error evaluating formula:", error);
+      return errorResponseData(res, messages.invalidFormula, error.message);
+    }
+
+    const formulaNameExists = await Models.Formula.findOne({
+      where: {
+        [Op.and]: [{ formulaName: formulaName }, { createdBy: req.user.id }],
+      },
+    });
+
+    if (formulaNameExists) {
+      return errorResponseWithoutData(res, messages.formulaNameAlreadyExists);
+    }
+
     const pairs = formula.match(
       /\b\w+:(\d{4}-\d{2}-\d{2}|\d{4}-\d{2}|\d{4})\b/g
     );
@@ -507,6 +561,7 @@ module.exports.addFormula = async (req, res) => {
                   },
                 ],
               },
+              required: false,
             },
           ],
         })
@@ -516,7 +571,7 @@ module.exports.addFormula = async (req, res) => {
     let existedNamesResult = [];
     await Promise.all(existedNames)
       .then((result) => {
-        console.log("Existed Names result: ", result);
+        // console.log("Existed Names result: ", JSON.stringify(result));
         existedNamesResult = result;
       })
       .catch((error) => {
@@ -534,6 +589,19 @@ module.exports.addFormula = async (req, res) => {
         "Data with this synonyms don't exists within given date.",
         400
       );
+    }
+
+    const dates = formula
+      .match(/\b\w+:(\d{4}-\d{2}-\d{2}|\d{4}-\d{2}|\d{4})\b/g)
+      .map((match) => match.split(":")[1]);
+
+    let currentDate = new Date();
+
+    for (const date of dates) {
+      let givenDate = new Date(date);
+      if (givenDate > currentDate) {
+        return errorResponseWithoutData(res, messages.futureDateNotAllowed);
+      }
     }
 
     const existedUserFormula = await Models.Formula.count({

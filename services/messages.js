@@ -1,3 +1,5 @@
+const { invalid } = require("joi");
+
 module.exports = {
   messages: {
     error: "Something went wrong.",
@@ -31,5 +33,13 @@ module.exports = {
     errorAddingFormula: "Something went wrong while adding formula.",
     successAddingFormula: "Formula added successfully.",
     Formula5NotAllowed: "More than 5 formulas are not allowed",
+    futureDateNotAllowed: "Dates in future are not allowed.",
+    formulaNameAlreadyExists: "Formula with this name already exists.",
+    improperBrackets: "Please provide proper opening and closing brackets.",
+    emptyBracketsNotAllowed:
+      "Empty brackets inside the formula is not allowed.",
+    invalidExpressions: "Please remove the following invalid expressions.",
+    invalidFormula:
+      "Provided formula is invalid. Please provide valid formula.",
   },
 };

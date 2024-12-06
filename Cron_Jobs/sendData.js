@@ -33,166 +33,174 @@ async function calculateFormulas(userId) {
     let existedNames = [];
 
     for (const formulaItem of user.dataValues.Formula) {
-      let formula = formulaItem.dataValues.formula;
       let formulaName = formulaItem.dataValues.formulaName;
 
-      const pairs = formula.match(
-        /\b\w+:(\d{4}-\d{2}-\d{2}|\d{4}-\d{2}|\d{4})\b/g
-      );
+      try {
+        let formula = formulaItem.dataValues.formula;
 
-      console.log("pairs: ", pairs);
+        const pairs = formula.match(
+          /\b\w+:(\d{4}-\d{2}-\d{2}|\d{4}-\d{2}|\d{4})\b/g
+        );
 
-      const result = pairs.reduce((acc, pair) => {
-        const [key, value] = pair.split(":");
-        const date = value.split("-");
-        if (date.length === 3) {
-          acc[key] = acc[key] || [];
-          acc[key].push(`${date[0]}-${date[1]}-${date[2]}`);
-        } else if (date.length === 2) {
-          acc[key] = acc[key] || [];
-          acc[key].push(`${date[0]}-${date[1]}`);
-        } else {
-          acc[key] = acc[key] || [];
-          acc[key].push(date[0]);
-        }
-        return acc;
-      }, {});
+        console.log("pairs: ", pairs);
 
-      console.log("result: ", result);
+        const result = pairs.reduce((acc, pair) => {
+          const [key, value] = pair.split(":");
+          const date = value.split("-");
+          if (date.length === 3) {
+            acc[key] = acc[key] || [];
+            acc[key].push(`${date[0]}-${date[1]}-${date[2]}`);
+          } else if (date.length === 2) {
+            acc[key] = acc[key] || [];
+            acc[key].push(`${date[0]}-${date[1]}`);
+          } else {
+            acc[key] = acc[key] || [];
+            acc[key].push(date[0]);
+          }
+          return acc;
+        }, {});
 
-      const synonyms = Object.keys(result);
-      console.log("synonyms: ", synonyms);
+        console.log("result: ", result);
 
-      let j = 0;
-      let existedNamesResult = [];
-      for (const item of synonyms) {
-        console.log("item: ", item);
-        console.log(result[item].length);
+        const synonyms = Object.keys(result);
+        console.log("synonyms: ", synonyms);
 
-        for (let i = 0; i < result[item].length; i++) {
-          let date = result[item][i].split("-");
+        let j = 0;
+        let existedNamesResult = [];
+        for (const item of synonyms) {
+          console.log("item: ", item);
+          console.log(result[item].length);
 
-          let firstDate;
-          let lastDate;
-          if (date.length === 2) {
-            firstDate = new Date(result[item][i]);
-            lastDate = new Date(
-              firstDate.getFullYear(),
-              firstDate.getMonth() + 1,
-              0
-            );
-            lastDate = new Date(
-              lastDate.getTime() +
-                Math.abs(lastDate.getTimezoneOffset() * 60000)
-            );
-          } else if (date.length === 1) {
-            firstDate = new Date(result[item][i]);
-            lastDate = new Date(firstDate.getFullYear(), 11, 31);
-            lastDate = new Date(
-              lastDate.getTime() +
-                Math.abs(lastDate.getTimezoneOffset() * 60000)
+          for (let i = 0; i < result[item].length; i++) {
+            let date = result[item][i].split("-");
+
+            let firstDate;
+            let lastDate;
+            if (date.length === 2) {
+              firstDate = new Date(result[item][i]);
+              lastDate = new Date(
+                firstDate.getFullYear(),
+                firstDate.getMonth() + 1,
+                0
+              );
+              lastDate = new Date(
+                lastDate.getTime() +
+                  Math.abs(lastDate.getTimezoneOffset() * 60000)
+              );
+            } else if (date.length === 1) {
+              firstDate = new Date(result[item][i]);
+              lastDate = new Date(firstDate.getFullYear(), 11, 31);
+              lastDate = new Date(
+                lastDate.getTime() +
+                  Math.abs(lastDate.getTimezoneOffset() * 60000)
+              );
+            }
+
+            existedNames.push(
+              Models.Name.findOne({
+                where: {
+                  [Op.and]: [{ synonym: item }, { userId: userId }],
+                },
+                include: [
+                  {
+                    model: Models.Data,
+                    as: "Data",
+                    where: {
+                      [Op.and]: [
+                        {
+                          date: {
+                            [Op.gte]: firstDate,
+                            [Op.lte]: lastDate,
+                          },
+                        },
+                        {
+                          createdBy: userId,
+                        },
+                      ],
+                    },
+                    attributes: [
+                      [
+                        sequelize.fn("SUM", sequelize.col("amount")),
+                        "totalAmount",
+                      ],
+                    ],
+
+                    required: false,
+                  },
+                ],
+              })
             );
           }
-
-          existedNames.push(
-            Models.Name.findOne({
-              where: {
-                [Op.and]: [{ synonym: item }, { userId: userId }],
-              },
-              include: [
-                {
-                  model: Models.Data,
-                  as: "Data",
-                  where: {
-                    [Op.and]: [
-                      {
-                        date: {
-                          [Op.gte]: firstDate,
-                          [Op.lte]: lastDate,
-                        },
-                      },
-                      {
-                        createdBy: userId,
-                      },
-                    ],
-                  },
-                  attributes: [
-                    [
-                      sequelize.fn("SUM", sequelize.col("amount")),
-                      "totalAmount",
-                    ],
-                  ],
-
-                  required: false,
-                },
-              ],
+          await Promise.all(existedNames)
+            .then((result) => {
+              console.log(" result: ", JSON.stringify(result));
+              existedNamesResult = result;
             })
-          );
+            .catch((error) => {
+              console.log(error);
+              return errorResponseWithoutData(
+                res,
+                "Something went wrong while fetching the data.",
+                400
+              );
+            });
         }
-        await Promise.all(existedNames)
-          .then((result) => {
-            console.log(" result: ", JSON.stringify(result));
-            existedNamesResult = result;
-          })
-          .catch((error) => {
-            console.log(error);
-            return errorResponseWithoutData(
-              res,
-              "Something went wrong while fetching the data.",
-              400
-            );
+
+        let totalArray = [];
+
+        for (const item of existedNamesResult) {
+          if (item.id === null) {
+            console.log("Item is null");
+            totalArray.push(null);
+            continue;
+          }
+
+          let itemTotal;
+
+          if (item.Data.length === 0) {
+            itemTotal = 0;
+            // continue;
+          } else {
+            itemTotal = item.Data[0].dataValues.totalAmount;
+          }
+
+          totalArray.push(itemTotal);
+        }
+
+        const nameDatePatterns = formula.match(
+          /(\w+):(\d{4}-\d{2}-\d{2}|\d{4}-\d{2}|\d{4})/g
+        );
+
+        if (totalArray.includes(null)) {
+          excelData.push({
+            [formulaName]: "Data For this formula not found",
           });
-      }
-
-      let totalArray = [];
-
-      for (const item of existedNamesResult) {
-        if (item.id === null) {
-          console.log("Item is null");
-          totalArray.push(null);
           continue;
         }
 
-        let itemTotal;
+        const replacedFormula = nameDatePatterns.reduce((acc, pattern) => {
+          const [name, date] = pattern.split(":");
+          const index = totalArray.findIndex(
+            (value, index) => index === nameDatePatterns.indexOf(pattern)
+          );
+          if (index !== -1) {
+            return acc.replace(pattern, totalArray[index]);
+          } else {
+            return acc;
+          }
+        }, formula);
 
-        if (item.Data.length === 0) {
-          itemTotal = 0;
-          // continue;
-        } else {
-          itemTotal = item.Data[0].dataValues.totalAmount;
-        }
+        const calculatedResult = eval(replacedFormula);
+        console.log("Replaced Formula: ", replacedFormula);
 
-        totalArray.push(itemTotal);
-      }
+        excelData.push({ [formulaName]: calculatedResult.toFixed(2) });
 
-      const nameDatePatterns = formula.match(
-        /(\w+):(\d{4}-\d{2}-\d{2}|\d{4}-\d{2}|\d{4})/g
-      );
-
-      if (totalArray.includes(null)) {
-        excelData.push({
-          [formulaName]: "Data For this formula not found",
-        });
+        existedNames = [];
+      } catch (error) {
+        console.log("Error inside the loop: ", error);
+        excelData.push({ [formulaName]: `Error: ${error.message}` });
         continue;
       }
-
-      const replacedFormula = nameDatePatterns.reduce((acc, pattern) => {
-        const [name, date] = pattern.split(":");
-        const index = totalArray.findIndex(
-          (value, index) => index === nameDatePatterns.indexOf(pattern)
-        );
-        if (index !== -1) {
-          return acc.replace(pattern, totalArray[index]);
-        } else {
-          return acc;
-        }
-      }, formula);
-
-      const calculatedResult = eval(replacedFormula);
-
-      excelData.push({ [formulaName]: calculatedResult.toFixed(2) });
-
-      existedNames = [];
     }
 
     const excelDataRows = excelData.map((data) => {
@@ -564,7 +572,7 @@ cron.schedule("1 10 * * MON", async () => {
 
 //1 10 1 * *
 
-cron.schedule("*/3 * * * * *", async () => {
+cron.schedule("1 10 1 * *", async () => {
   try {
     function formatFirstDate(date, format) {
       const map = {
